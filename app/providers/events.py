@@ -17,6 +17,7 @@ from pathlib import Path
 
 from app.categories import category_keyword, is_known_category
 from app.config import settings
+from app.i18n import normalize_lang, notice_curated_highlights, notice_no_event_feed
 from app.models import Item, Place
 from app.providers.http import build_client
 
@@ -118,7 +119,14 @@ def _guess_category(keywords: list[str]) -> str:
     return "culture"
 
 
-async def _openagenda_events(place: Place, *, openagenda_key: str | None = None) -> list[Item]:
+def _lang_preference(lang: str) -> tuple[str, ...]:
+    lng = normalize_lang(lang)
+    return (lng, "en", "fr") if lng == "fr" else ("en", "fr")
+
+
+async def _openagenda_events(
+    place: Place, *, openagenda_key: str | None = None, lang: str = "en"
+) -> list[Item]:
     key = (openagenda_key or "").strip() or settings.OPENAGENDA_KEY
     if not key:
         return []
@@ -150,13 +158,14 @@ async def _openagenda_events(place: Place, *, openagenda_key: str | None = None)
     except Exception:
         return []
 
+    prefer = _lang_preference(lang)
     items: list[Item] = []
     for ev in events:
-        title = _pick_lang(ev.get("title"))
+        title = _pick_lang(ev.get("title"), prefer=prefer)
         if not title:
             continue
         keywords = ev.get("keywords", {})
-        kw_list = _pick_lang(keywords) if isinstance(keywords, dict) else []
+        kw_list = _pick_lang(keywords, prefer=prefer) if isinstance(keywords, dict) else []
         category = _guess_category(kw_list if isinstance(kw_list, list) else [])
         timings = ev.get("timings") or []
         start = timings[0]["begin"][:10] if timings else None
@@ -174,7 +183,7 @@ async def _openagenda_events(place: Place, *, openagenda_key: str | None = None)
                 title=title,
                 category=category,
                 keyword=category_keyword(category, kind="event"),
-                description=_pick_lang(ev.get("description")),
+                description=_pick_lang(ev.get("description"), prefer=prefer),
                 image_url=(ev.get("image") or {}).get("base"),
                 location_name=location.get("name") or place.name,
                 latitude=location.get("latitude"),
@@ -214,27 +223,20 @@ def _has_openagenda_key(openagenda_key: str | None = None) -> bool:
 
 
 async def get_events(
-    place: Place, *, openagenda_key: str | None = None
+    place: Place, *, openagenda_key: str | None = None, lang: str = "en"
 ) -> tuple[list[Item], list[str]]:
     """Return (events, notices)."""
     notices: list[str] = []
 
-    live = await _openagenda_events(place, openagenda_key=openagenda_key)
+    live = await _openagenda_events(place, openagenda_key=openagenda_key, lang=lang)
     if live:
         return live, notices
 
     curated = _curated_events(place)
     if curated:
         if not _has_openagenda_key(openagenda_key):
-            notices.append(
-                "Showing CityChilly's curated highlights for this city. "
-                "Add an OpenAgenda key in Parameters to pull live events anywhere."
-            )
+            notices.append(notice_curated_highlights(lang))
         return curated, notices
 
-    notices.append(
-        f"No curated event feed for {place.name} yet \u2014 explore the live "
-        "Activities below (from OpenStreetMap), or add an OpenAgenda key in "
-        "Parameters for live events in any city."
-    )
+    notices.append(notice_no_event_feed(place.name, lang))
     return [], notices

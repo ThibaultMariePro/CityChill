@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 
 from app.config import settings
+from app.i18n import city_not_found, normalize_lang
 from app.models import Place, PlaceSuggestion
 from app.providers.http import build_client
 
@@ -85,7 +86,7 @@ async def geocode_postcode(postcode: str) -> PlaceSuggestion | None:
             pass
 
     # Fallback: Open-Meteo (worldwide, less precise for individual codes).
-    params = {"name": clean, "count": 5, "language": "en", "format": "json"}
+    params = {"name": clean, "count": 5, "language": "en", "format": "json"}  # postcode digits
     async with build_client() as client:
         resp = await client.get(settings.GEOCODE_URL, params=params)
         resp.raise_for_status()
@@ -145,7 +146,7 @@ def _suggestion_from_result(r: dict, *, kind: str, postcode: str | None = None) 
     )
 
 
-async def search_places(query: str, count: int = 8) -> list[PlaceSuggestion]:
+async def search_places(query: str, count: int = 8, *, lang: str = "en") -> list[PlaceSuggestion]:
     """Return geocoding suggestions for *query* (city name or postal code)."""
     q = query.strip()
     if not q:
@@ -156,7 +157,12 @@ async def search_places(query: str, count: int = 8) -> list[PlaceSuggestion]:
         resolved = await geocode_postcode(q)
         return [resolved] if resolved else []
 
-    params = {"name": q, "count": min(count, 15), "language": "en", "format": "json"}
+    params = {
+        "name": q,
+        "count": min(count, 15),
+        "language": normalize_lang(lang),
+        "format": "json",
+    }
     async with build_client() as client:
         resp = await client.get(settings.GEOCODE_URL, params=params)
         resp.raise_for_status()
@@ -197,11 +203,11 @@ async def search_places(query: str, count: int = 8) -> list[PlaceSuggestion]:
     return suggestions
 
 
-async def geocode_city(city: str, country: str | None = None) -> Place:
+async def geocode_city(city: str, country: str | None = None, *, lang: str = "en") -> Place:
     params = {
         "name": city,
         "count": 10,
-        "language": "en",
+        "language": normalize_lang(lang),
         "format": "json",
     }
     async with build_client() as client:
@@ -211,7 +217,7 @@ async def geocode_city(city: str, country: str | None = None) -> Place:
 
     results = data.get("results") or []
     if not results:
-        raise ValueError(f"Could not find a city named '{city}'.")
+        raise ValueError(city_not_found(city, lang))
 
     chosen = results[0]
     if country:

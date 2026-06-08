@@ -14,6 +14,13 @@ from app import __version__
 from app.api_keys import API_KEY_SPECS
 from app.cache import TTLCache
 from app.categories import CATEGORIES
+from app.i18n import (
+    category_label,
+    geocode_unavailable,
+    normalize_lang,
+    notice_activities_degraded,
+    notice_no_activities,
+)
 from app.config import settings
 from app.models import DiscoverResponse, Item, Place, Weather, WeatherHint
 from app.providers.activities import get_activities
@@ -82,15 +89,17 @@ async def health() -> dict:
 async def geocode_suggest(
     q: str = Query(..., min_length=1, max_length=200),
     count: int = Query(default=8, ge=1, le=15),
+    lang: str = Query(default="en", max_length=8),
 ) -> dict:
     """Return autocomplete suggestions for a city name or postal code."""
     q = q.strip()
-    cache_key = f"geocode::{q.lower()}::{count}"
+    lng = normalize_lang(lang)
+    cache_key = f"geocode::{q.lower()}::{count}::{lng}"
     cached = cache.get(cache_key)
     if cached:
         return cached
     try:
-        suggestions = await search_places(q, count)
+        suggestions = await search_places(q, count, lang=lng)
         result: dict = {"suggestions": [s.model_dump() for s in suggestions]}
     except Exception:
         result = {"suggestions": []}
@@ -137,10 +146,15 @@ async def api_keys() -> dict:
 
 
 @app.get("/api/categories")
-async def categories() -> dict:
+async def categories(lang: str = Query(default="en", max_length=8)) -> dict:
+    lng = normalize_lang(lang)
     return {
         "categories": [
-            {"id": cid, "label": meta["label"], "emoji": meta["emoji"]}
+            {
+                "id": cid,
+                "label": category_label(cid, lng),
+                "emoji": meta["emoji"],
+            }
             for cid, meta in CATEGORIES.items()
         ]
     }
@@ -154,13 +168,15 @@ async def discover(
     lon: float | None = Query(default=None, ge=-180.0, le=180.0),
     place_name: str | None = Query(default=None, max_length=200),
     openagenda_key: str | None = Query(default=None, max_length=200),
+    lang: str = Query(default="en", max_length=8),
 ) -> DiscoverResponse:
     oa_tag = _openagenda_cache_tag(openagenda_key)
+    lng = normalize_lang(lang)
 
     # ── Coordinate-based path (skips geocoding, used by pinned locations) ──
     if lat is not None and lon is not None:
         display = place_name or f"{lat:.3f}, {lon:.3f}"
-        cache_key = f"discover::coords::{_make_pin_id(lat, lon)}::{oa_tag}"
+        cache_key = f"discover::coords::{_make_pin_id(lat, lon)}::{oa_tag}::{lng}"
         cached = cache.get(cache_key)
         if cached:
             return cached
@@ -176,24 +192,22 @@ async def discover(
         effective_city = (city or "").strip() or settings.DEFAULT_CITY
         cache_key = (
             f"discover::{effective_city.lower()}::"
-            f"{(country or '').lower().strip()}::{oa_tag}"
+            f"{(country or '').lower().strip()}::{oa_tag}::{lng}"
         )
         cached = cache.get(cache_key)
         if cached:
             return cached
         try:
-            place = await geocode_city(effective_city, country)
+            place = await geocode_city(effective_city, country, lang=lng)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
         except Exception:
-            raise HTTPException(
-                status_code=502, detail="City lookup service is temporarily unavailable."
-            )
+            raise HTTPException(status_code=502, detail=geocode_unavailable(lng))
 
     weather, activities_result, events_result = await asyncio.gather(
-        get_weather(place.latitude, place.longitude),
+        get_weather(place.latitude, place.longitude, lang=lng),
         get_activities(place),
-        get_events(place, openagenda_key=openagenda_key),
+        get_events(place, openagenda_key=openagenda_key, lang=lng),
         return_exceptions=True,
     )
 
@@ -210,18 +224,11 @@ async def discover(
     if isinstance(activities_result, BaseException):
         activities = []
         activities_degraded = True
-        notices.append(
-            "Live activities are temporarily unavailable (the OpenStreetMap "
-            "service is busy). Please try again in a moment \u2014 this usually "
-            "fixes itself within seconds."
-        )
+        notices.append(notice_activities_degraded(lng))
     else:
         activities = activities_result
         if not activities:
-            notices.append(
-                f"We couldn't find tagged activities near {place.name} right now. "
-                "Try a larger or differently-spelled city name."
-            )
+            notices.append(notice_no_activities(place.name, lng))
 
     _attach_weather(activities, weather)
     _attach_weather(events, weather)
@@ -252,6 +259,10 @@ if WEB_DIR.exists():
     @app.get("/app.js")
     async def appjs() -> FileResponse:
         return FileResponse(WEB_DIR / "app.js")
+
+    @app.get("/i18n.js")
+    async def i18njs() -> FileResponse:
+        return FileResponse(WEB_DIR / "i18n.js")
 
     @app.get("/styles.css")
     async def styles() -> FileResponse:

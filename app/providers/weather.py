@@ -5,6 +5,7 @@ Used to add an "outdoor suitability" hint to outdoor activities and events.
 from __future__ import annotations
 
 from app.config import settings
+from app.i18n import normalize_lang, wmo_summary
 from app.models import Weather, WeatherDay
 from app.providers.http import build_client
 
@@ -39,8 +40,9 @@ WMO_CODES: dict[int, tuple[str, str]] = {
 }
 
 
-def _describe(code: int) -> tuple[str, str]:
-    return WMO_CODES.get(code, ("Unknown", "\U0001F300"))
+def _describe(code: int, *, lang: str = "en") -> tuple[str, str]:
+    summary_en, emoji = WMO_CODES.get(code, ("Unknown", "\U0001F300"))
+    return wmo_summary(code, lang), emoji
 
 
 def _outdoor_score(code: int, precip_prob: int | None, tmax: float | None) -> int:
@@ -72,7 +74,7 @@ def _outdoor_score(code: int, precip_prob: int | None, tmax: float | None) -> in
     return max(0, min(100, score))
 
 
-async def get_weather(latitude: float, longitude: float) -> Weather:
+async def get_weather(latitude: float, longitude: float, *, lang: str = "en") -> Weather:
     params = {
         "latitude": latitude,
         "longitude": longitude,
@@ -102,7 +104,7 @@ async def get_weather(latitude: float, longitude: float) -> Weather:
     days: list[WeatherDay] = []
     for i, date in enumerate(dates):
         code = codes[i] if i < len(codes) else 0
-        summary, emoji = _describe(code)
+        summary, emoji = _describe(code, lang=lang)
         day_tmax = tmax[i] if i < len(tmax) else None
         day_tmin = tmin[i] if i < len(tmin) else None
         day_precip = precip[i] if i < len(precip) else None

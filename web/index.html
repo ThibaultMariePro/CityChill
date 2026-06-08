@@ -18,18 +18,19 @@
 <body>
   <header class="topbar">
     <div class="topbar__inner">
-      <a class="brand" href="/" aria-label="CityChilly home">
+      <a class="brand" href="/" data-i18n-aria="brand.aria" aria-label="CityChilly home">
         <img src="/assets/logo.svg" alt="" class="brand__logo" width="34" height="34" />
         <span class="brand__name">City<span class="brand__accent">Chilly</span></span>
       </a>
 
-      <form id="search-form" class="search" role="search" aria-label="Location search">
+      <form id="search-form" class="search" role="search" data-i18n-aria="search.aria" aria-label="Location search">
         <span class="search__icon" aria-hidden="true">🔍</span>
         <input
           id="city-input"
           class="search__input"
           type="text"
           name="city"
+          data-i18n-placeholder="search.placeholder"
           placeholder="City or postal code…"
           autocomplete="off"
           spellcheck="false"
@@ -39,17 +40,16 @@
           aria-controls="autocomplete-list"
           aria-autocomplete="list"
         />
-        <button class="search__btn" type="submit">Explore</button>
-        <ul id="autocomplete-list" class="autocomplete" role="listbox" aria-label="Location suggestions" hidden></ul>
+        <button class="search__btn" type="submit" data-i18n="search.submit">Explore</button>
+        <ul id="autocomplete-list" class="autocomplete" role="listbox" data-i18n-aria="search.suggestions" aria-label="Location suggestions" hidden></ul>
       </form>
 
-      <button id="theme-toggle" class="icon-btn" title="Toggle light / dark" aria-label="Toggle light / dark">
+      <button id="theme-toggle" class="icon-btn" data-i18n-title="theme.toggle" data-i18n-aria="theme.toggle" title="Toggle light / dark" aria-label="Toggle light / dark">
         <span class="theme-toggle__icon">🌙</span>
       </button>
     </div>
-    <!-- Pinned locations bar — shown when ≥1 location is pinned -->
-    <div id="pinned-bar" class="pinned-bar" hidden aria-label="Pinned postal codes">
-      <span class="pinned-bar__label">Postal codes in scope</span>
+    <div id="pinned-bar" class="pinned-bar" hidden data-i18n-aria="pinned.aria" aria-label="Pinned postal codes">
+      <span class="pinned-bar__label" data-i18n="pinned.label">Postal codes in scope</span>
       <div id="pinned-chips" class="pinned-bar__chips"></div>
     </div>
   </header>
@@ -57,35 +57,34 @@
   <main class="layout">
     <section class="hero" id="hero">
       <div class="hero__text">
-        <p class="hero__eyebrow" id="place-eyebrow">Now exploring</p>
+        <p class="hero__eyebrow" id="place-eyebrow" data-i18n="hero.exploring">Now exploring</p>
         <h1 class="hero__title" id="place-name">Nantes</h1>
         <p class="hero__subtitle" id="place-sub">France</p>
       </div>
-      <div class="hero__weather" id="weather-strip" aria-label="Weather forecast"></div>
+      <div class="hero__weather" id="weather-strip" data-i18n-aria="weather.aria" aria-label="Weather forecast"></div>
     </section>
 
     <nav class="tabs" role="tablist">
-      <button class="tab is-active" data-tab="discover" role="tab">🧭 Discover</button>
-      <button class="tab" data-tab="agenda" role="tab">🗓️ My Agenda <span class="tab__count" id="agenda-count">0</span></button>
-      <button class="tab" data-tab="favorites" role="tab">❤️ Favorites <span class="tab__count" id="fav-count">0</span></button>
-      <button class="tab" data-tab="parameters" role="tab">⚙️ Parameters</button>
-      <button class="tab" data-tab="warnings" role="tab" hidden>⚠️ Warnings <span class="tab__count" id="warnings-count">0</span></button>
+      <button class="tab is-active" data-tab="discover" role="tab" data-i18n="tab.discover">🧭 Discover</button>
+      <button class="tab" data-tab="agenda" role="tab"><span data-i18n="tab.agenda">🗓️ My Agenda</span> <span class="tab__count" id="agenda-count">0</span></button>
+      <button class="tab" data-tab="favorites" role="tab"><span data-i18n="tab.favorites">❤️ Favorites</span> <span class="tab__count" id="fav-count">0</span></button>
+      <button class="tab" data-tab="parameters" role="tab" data-i18n="tab.parameters">⚙️ Parameters</button>
+      <button class="tab" data-tab="warnings" role="tab" hidden><span data-i18n="tab.warnings">⚠️ Warnings</span> <span class="tab__count" id="warnings-count">0</span></button>
     </nav>
 
-    <!-- Discover -->
     <section class="panel is-active" id="panel-discover" role="tabpanel">
       <div class="toolbar">
         <div class="chips" id="category-chips"></div>
         <div class="toolbar__right">
           <div class="segmented" id="kind-filter">
-            <button class="seg is-active" data-kind="all">All</button>
-            <button class="seg" data-kind="event">Events</button>
-            <button class="seg" data-kind="activity">Activities</button>
+            <button class="seg is-active" data-kind="all" data-i18n="filter.kind.all">All</button>
+            <button class="seg" data-kind="event" data-i18n="filter.kind.event">Events</button>
+            <button class="seg" data-kind="activity" data-i18n="filter.kind.activity">Activities</button>
           </div>
           <label class="switch">
             <input type="checkbox" id="outdoor-only" />
             <span class="switch__track"><span class="switch__thumb"></span></span>
-            <span class="switch__label">Outdoor only</span>
+            <span class="switch__label" data-i18n="filter.outdoor">Outdoor only</span>
           </label>
         </div>
       </div>
@@ -94,93 +93,95 @@
       <div class="empty" id="discover-empty" hidden></div>
     </section>
 
-    <!-- Agenda -->
     <section class="panel" id="panel-agenda" role="tabpanel">
       <div class="panel__head">
-        <h2>My Agenda</h2>
-        <p class="panel__hint">Your hand-picked roadmap, sorted by date. Stored on this device.</p>
+        <h2 data-i18n="panel.agenda.title">My Agenda</h2>
+        <p class="panel__hint" data-i18n="panel.agenda.hint">Your hand-picked roadmap, sorted by date. Stored on this device.</p>
       </div>
       <div id="agenda-export" class="agenda-export" hidden>
-        <span class="agenda-export__label">Export</span>
+        <span class="agenda-export__label" data-i18n="agenda.export">Export</span>
         <div class="agenda-export__actions">
-          <button type="button" class="btn btn--ghost btn--compact" id="agenda-copy-text" title="Copy agenda as plain text">📋 Copy text</button>
-          <button type="button" class="btn btn--ghost btn--compact" id="agenda-download-ics" title="Download iCalendar file">📅 Calendar (.ics)</button>
-          <button type="button" class="btn btn--ghost btn--compact" id="agenda-download-json" title="Download JSON backup">💾 JSON</button>
+          <button type="button" class="btn btn--ghost btn--compact" id="agenda-copy-text" data-i18n-title="agenda.copyTitle" data-i18n="agenda.copy" title="Copy agenda as plain text">📋 Copy text</button>
+          <button type="button" class="btn btn--ghost btn--compact" id="agenda-download-ics" data-i18n-title="agenda.icsTitle" data-i18n="agenda.ics" title="Download iCalendar file">📅 Calendar (.ics)</button>
+          <button type="button" class="btn btn--ghost btn--compact" id="agenda-download-json" data-i18n-title="agenda.jsonTitle" data-i18n="agenda.json" title="Download JSON backup">💾 JSON</button>
         </div>
-        <p class="agenda-export__hint">Dated items also have a <strong>📅 GCal</strong> button to add them to Google Calendar.</p>
+        <p class="agenda-export__hint" data-i18n-html="agenda.exportHint">Dated items also have a <strong>📅 GCal</strong> button to add them to Google Calendar.</p>
       </div>
       <div id="agenda-list" class="agenda"></div>
       <div class="empty" id="agenda-empty">
         <div class="empty__emoji">🗓️</div>
-        <h3>Your agenda is empty</h3>
-        <p>Add events and activities from the Discover tab to build your roadmap.</p>
+        <h3 data-i18n="empty.agenda.title">Your agenda is empty</h3>
+        <p data-i18n="empty.agenda.body">Add events and activities from the Discover tab to build your roadmap.</p>
       </div>
     </section>
 
-    <!-- Parameters -->
     <section class="panel" id="panel-parameters" role="tabpanel">
       <div class="panel__head">
-        <h2>Parameters</h2>
-        <p class="panel__hint">Color themes and optional API keys — all saved on this device.</p>
+        <h2 data-i18n="panel.parameters.title">Parameters</h2>
+        <p class="panel__hint" data-i18n="panel.parameters.hint">Language, color themes and optional API keys — all saved on this device.</p>
       </div>
       <form id="params-form" class="params" autocomplete="off">
+        <div id="params-language" class="params-theme">
+          <h3 class="params-theme__title" data-i18n="params.lang.title">Language</h3>
+          <p class="params-theme__desc" data-i18n="params.lang.desc">Choose the app interface language. Applies immediately.</p>
+          <div id="language-options" class="language-options" role="radiogroup" aria-label="Language"></div>
+        </div>
         <div id="params-theme" class="params-theme">
-          <h3 class="params-theme__title">Color theme</h3>
-          <p class="params-theme__desc">Pick a palette for accents and surfaces. Applies immediately.</p>
-          <div id="palette-grid" class="palette-grid" role="radiogroup" aria-label="Color theme"></div>
+          <h3 class="params-theme__title" data-i18n="params.theme.title">Color theme</h3>
+          <p class="params-theme__desc" data-i18n="params.theme.desc">Pick a palette for accents and surfaces. Applies immediately.</p>
+          <div id="palette-grid" class="palette-grid" role="radiogroup" data-i18n-aria="params.theme.aria" aria-label="Color theme"></div>
         </div>
         <div id="params-fields" class="params__fields"></div>
         <div class="params__actions">
-          <button type="submit" class="btn btn--primary">Save &amp; refresh</button>
-          <button type="button" class="btn btn--ghost" id="params-clear">Clear keys</button>
+          <button type="submit" class="btn btn--primary" data-i18n="params.save">Save &amp; refresh</button>
+          <button type="button" class="btn btn--ghost" id="params-clear" data-i18n="params.clear">Clear keys</button>
         </div>
         <p class="params__note" id="params-note"></p>
       </form>
     </section>
 
-    <!-- Favorites -->
     <section class="panel" id="panel-favorites" role="tabpanel">
       <div class="panel__head">
-        <h2>Favorites</h2>
-        <p class="panel__hint">Everything you loved, saved on this device.</p>
+        <h2 data-i18n="panel.favorites.title">Favorites</h2>
+        <p class="panel__hint" data-i18n="panel.favorites.hint">Everything you loved, saved on this device.</p>
       </div>
       <div class="grid" id="favorites-grid"></div>
       <div class="empty" id="favorites-empty">
         <div class="empty__emoji">❤️</div>
-        <h3>No favorites yet</h3>
-        <p>Tap the heart on any card to keep it here.</p>
+        <h3 data-i18n="empty.favorites.title">No favorites yet</h3>
+        <p data-i18n="empty.favorites.body">Tap the heart on any card to keep it here.</p>
       </div>
     </section>
 
-    <!-- Warnings (last tab) -->
     <section class="panel" id="panel-warnings" role="tabpanel">
       <div class="panel__head">
-        <h2>Warnings</h2>
-        <p class="panel__hint">Service notices and data limitations for your current selection. Tap a warning to dismiss it.</p>
+        <h2 data-i18n="panel.warnings.title">Warnings</h2>
+        <p class="panel__hint" data-i18n="panel.warnings.hint">Service notices and data limitations for your current selection. Tap a warning to dismiss it.</p>
       </div>
       <div id="warnings-list" class="warnings-list"></div>
       <div class="empty" id="warnings-empty" hidden>
         <div class="empty__emoji">✅</div>
-        <h3>No warnings</h3>
-        <p>Everything looks good for your current selection.</p>
+        <h3 data-i18n="empty.warnings.title">No warnings</h3>
+        <p data-i18n="empty.warnings.body">Everything looks good for your current selection.</p>
       </div>
     </section>
   </main>
 
   <footer class="footer">
     <p>
-      CityChilly · data from
+      <span data-i18n="footer.data">CityChilly · data from</span>
       <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>,
       <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> &amp;
-      curated venue sources. Every card links to its original source.
+      <span data-i18n="footer.sources">curated venue sources. Every card links to its original source.</span>
     </p>
   </footer>
 
   <div id="loading" class="loading" hidden>
     <div class="loading__spinner"></div>
-    <p id="loading-text">Finding cool things to do…</p>
+    <p id="loading-text" data-i18n="loading.default">Finding cool things to do…</p>
   </div>
 
+  <script src="/i18n.js" defer></script>
   <script src="/app.js" defer></script>
 </body>
 </html>

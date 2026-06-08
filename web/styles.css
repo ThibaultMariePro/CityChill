@@ -770,6 +770,31 @@ a { color: inherit; }
   color: var(--text-soft);
   line-height: 1.4;
 }
+.language-options {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.language-option {
+  flex: 1 1 120px;
+  border: 2px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: .88rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.language-option:hover {
+  border-color: color-mix(in srgb, var(--coral) 45%, var(--border));
+}
+.language-option.is-active {
+  border-color: var(--coral);
+  box-shadow: var(--ring);
+}
 .palette-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));

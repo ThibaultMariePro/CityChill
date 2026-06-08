@@ -4,6 +4,20 @@
 (() => {
   "use strict";
 
+  const I18N = window.CityChillyI18n || {
+    t: (key) => key,
+    getLang: () => "en",
+    setLang: () => "en",
+    applyStatic: () => {},
+    translateKeyword: (word) => word,
+    dateLocale: () => undefined,
+    SUPPORTED: ["en", "fr"],
+  };
+  const t = (key, vars) => I18N.t(key, vars);
+  const getLang = () => I18N.getLang();
+  const translateKeyword = (word) => I18N.translateKeyword(word);
+  const dateLocale = () => I18N.dateLocale();
+
   const API = "";
   const LS = {
     theme:     "citychilly:theme",
@@ -13,6 +27,7 @@
     agenda:    "citychilly:agenda",
     params:           "citychilly:params",
     palette:          "citychilly:palette",
+    lang:             "citychilly:lang",
     dismissedNotices: "citychilly:dismissedNotices",
   };
 
@@ -112,26 +127,36 @@
     state.categories.find((c) => c.id === id) || { label: id, emoji: "✨" };
 
   function itemKeyword(item) {
-    if (item.keyword) return item.keyword;
-    const meta = catMeta(item.category);
-    if (item.kind === "event") return meta.label.split(" & ")[0];
-    return meta.label;
+    let word;
+    if (item.keyword) word = item.keyword;
+    else {
+      const meta = catMeta(item.category);
+      word = item.kind === "event" ? meta.label.split(" & ")[0] : meta.label;
+    }
+    return translateKeyword(word);
   }
 
   const fmtDay = (iso) => {
     if (!iso) return null;
-    return new Date(iso + "T00:00:00").toLocaleDateString(undefined, {
+    return new Date(iso + "T00:00:00").toLocaleDateString(dateLocale(), {
       weekday: "short", month: "short", day: "numeric",
     });
   };
   const fmtRange = (start, end) => {
-    if (!start) return "Anytime";
+    if (!start) return t("card.anytime");
     if (!end || end === start) return fmtDay(start);
     return `${fmtDay(start)} – ${fmtDay(end)}`;
   };
 
   const wxLevel = (score) => (score >= 70 ? "good" : score >= 45 ? "ok" : "bad");
-  const wxLabel = (score) => (score >= 70 ? "Great outdoors" : score >= 45 ? "Bring a layer" : "Better indoors");
+  const wxLabel = (score) => (
+    score >= 70 ? t("wx.great") : score >= 45 ? t("wx.layer") : t("wx.indoors")
+  );
+
+  function appendLangToSearchParams(sp) {
+    sp.set("lang", getLang());
+    return sp;
+  }
 
   function googleMapsUrl(item) {
     const hasCoords = item.latitude != null && item.longitude != null;
@@ -169,8 +194,8 @@
     weather.days.slice(0, 8).forEach((d, i) => {
       const node = el("div", "wx-day");
       const name = i === 0
-        ? "Today"
-        : new Date(d.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short" });
+        ? t("weather.today")
+        : new Date(d.date + "T00:00:00").toLocaleDateString(dateLocale(), { weekday: "short" });
       const tmax = d.temp_max != null ? Math.round(d.temp_max) : "–";
       const tmin = d.temp_min != null ? Math.round(d.temp_min) : "–";
       node.innerHTML = `
@@ -192,7 +217,7 @@
       $("#place-name").textContent = places.join(" · ");
       placeSub.textContent = codes.join(" · ");
       placeSub.classList.add("hero__subtitle--codes");
-      if (eyebrow) eyebrow.textContent = "Postal codes in scope";
+      if (eyebrow) eyebrow.textContent = t("hero.postcodes");
     } else if (state.pins.length === 1) {
       const pin = state.pins[0];
       const place = state.pinData[pin.id]?.place;
@@ -201,13 +226,13 @@
         ? [place.admin, place.country].filter(Boolean).join(", ")
         : (pin.display || "");
       placeSub.classList.remove("hero__subtitle--codes");
-      if (eyebrow) eyebrow.textContent = "Now exploring";
+      if (eyebrow) eyebrow.textContent = t("hero.exploring");
     } else {
       const names = state.pins.map((p) => state.pinData[p.id]?.place?.name || p.name);
-      $("#place-name").textContent = `${state.pins.length} locations`;
+      $("#place-name").textContent = t("hero.locations", { count: state.pins.length });
       placeSub.textContent = names.join(" · ");
       placeSub.classList.remove("hero__subtitle--codes");
-      if (eyebrow) eyebrow.textContent = "Now exploring";
+      if (eyebrow) eyebrow.textContent = t("hero.exploring");
     }
   }
 
@@ -282,14 +307,14 @@
     notices.forEach((n) => {
       const row = el("button", "warning-item");
       row.type = "button";
-      row.title = "Dismiss warning";
+      row.title = t("panel.warnings.hint");
       row.innerHTML = `
         <span class="warning-item__icon" aria-hidden="true">⚠️</span>
         <span class="warning-item__text">${esc(n)}</span>
         <span class="warning-item__close" aria-hidden="true">×</span>`;
       row.addEventListener("click", () => {
         dismissNotice(n);
-        toast("Warning dismissed");
+        toast(t("toast.warningDismissed"));
       });
       list.appendChild(row);
     });
@@ -305,8 +330,8 @@
 
   function toggleFav(item) {
     const f = favorites();
-    if (f[item.id]) { delete f[item.id]; toast("Removed from favorites"); }
-    else            { f[item.id] = item;  toast("Saved to favorites ❤️"); }
+    if (f[item.id]) { delete f[item.id]; toast(t("toast.favRemoved")); }
+    else            { f[item.id] = item;  toast(t("toast.favSaved")); }
     store.write(LS.favorites, f);
     refreshCounts();
     renderActivePanel();
@@ -314,8 +339,8 @@
 
   function toggleAgenda(item) {
     const a = agenda();
-    if (a[item.id]) { delete a[item.id]; toast("Removed from agenda"); }
-    else            { a[item.id] = item;  toast("Added to your agenda 🗓️"); }
+    if (a[item.id]) { delete a[item.id]; toast(t("toast.agendaRemoved")); }
+    else            { a[item.id] = item;  toast(t("toast.agendaAdded")); }
     store.write(LS.agenda, a);
     refreshCounts();
     renderActivePanel();
@@ -340,11 +365,11 @@
           <span class="card__emoji" aria-hidden="true">${meta.emoji}</span>
           <p class="card__keyword">${esc(keyword)}</p>
         </div>
-        <button class="card__fav ${isFav(item.id) ? "is-active" : ""}" title="Save to favorites" aria-label="Save to favorites">
+        <button class="card__fav ${isFav(item.id) ? "is-active" : ""}" title="${esc(t("card.fav"))}" aria-label="${esc(t("card.fav"))}">
           ${isFav(item.id) ? "❤️" : "🤍"}
         </button>
       </div>
-      <span class="card__kind">${item.kind === "event" ? "Event" : "Activity"}</span>`;
+      <span class="card__kind">${item.kind === "event" ? t("card.event") : t("card.activity")}</span>`;
     media.querySelector(".card__fav").addEventListener("click", () => toggleFav(item));
 
     const body    = el("div", "card__body");
@@ -370,7 +395,7 @@
     const agendaBtn = el(
       "button",
       `btn ${inAgenda(item.id) ? "btn--in-agenda" : "btn--primary"}`,
-      inAgenda(item.id) ? "✓ In agenda" : "+ Add to agenda"
+      inAgenda(item.id) ? t("card.inAgenda") : t("card.addAgenda")
     );
     agendaBtn.addEventListener("click", () => toggleAgenda(item));
     actions.append(agendaBtn);
@@ -383,18 +408,18 @@
       mapsLink.href = mapsUrl;
       mapsLink.target = "_blank";
       mapsLink.rel = "noopener";
-      mapsLink.title = "Open in Google Maps";
-      mapsLink.innerHTML = "🌎 Location";
+      mapsLink.title = t("card.mapsTitle");
+      mapsLink.innerHTML = t("card.location");
 
-      const copyMap = el("button", "btn btn--ghost btn--compact", "🔗 Link");
+      const copyMap = el("button", "btn btn--ghost btn--compact", t("card.link"));
       copyMap.type = "button";
-      copyMap.title = "Copy Google Maps link";
+      copyMap.title = t("card.linkTitle");
       copyMap.addEventListener("click", async () => {
         try {
           await copyText(mapsUrl);
-          toast("Google Maps link copied");
+          toast(t("toast.mapsCopied"));
         } catch {
-          toast("Could not copy link");
+          toast(t("toast.mapsCopyFail"));
         }
       });
 
@@ -405,8 +430,8 @@
     source.href    = item.source_url;
     source.target  = "_blank";
     source.rel     = "noopener";
-    source.title   = `Source: ${item.source_name}`;
-    source.innerHTML = "↗ Source";
+    source.title   = t("card.sourceTitle", { name: item.source_name });
+    source.innerHTML = t("card.source");
     utilityRow.append(source);
 
     body.append(actions, utilityRow);
@@ -424,18 +449,18 @@
 
   function clearResults() {
     const eyebrow = $("#place-eyebrow");
-    if (eyebrow) eyebrow.textContent = "Now exploring";
-    $("#place-name").textContent = "Pick a location";
+    if (eyebrow) eyebrow.textContent = t("hero.exploring");
+    $("#place-name").textContent = t("hero.pick");
     const placeSub = $("#place-sub");
-    placeSub.textContent = "Search a city or postal code above";
+    placeSub.textContent = t("hero.searchHint");
     placeSub.classList.remove("hero__subtitle--codes");
     $("#weather-strip").innerHTML = "";
     renderWarnings();
     $("#discover-grid").innerHTML = "";
     const empty = $("#discover-empty");
     empty.hidden = false;
-    empty.innerHTML = `<div class="empty__emoji">📍</div><h3>No postal codes selected</h3><p>Pin one or more postal codes to explore activities and events.</p>`;
-    $("#results-meta").textContent = "0 results";
+    empty.innerHTML = `<div class="empty__emoji">📍</div><h3>${esc(t("empty.noPins.title"))}</h3><p>${esc(t("empty.noPins.body"))}</p>`;
+    $("#results-meta").textContent = t("results.zero");
   }
 
   function allItems() {
@@ -475,13 +500,15 @@
       ? codes.join(", ")
       : loaded.length > 1
         ? `${loaded.length} locations`
-        : (loaded[0] ? (state.pinData[loaded[0].id]?.place?.name || loaded[0].name) : "your city");
+        : (loaded[0] ? (state.pinData[loaded[0].id]?.place?.name || loaded[0].name) : t("results.yourCity"));
 
-    meta.textContent = `${items.length} result${items.length === 1 ? "" : "s"} in ${locText}`;
+    meta.textContent = items.length === 1
+      ? t("results.count", { count: items.length, place: locText })
+      : t("results.countPlural", { count: items.length, place: locText });
 
     if (!items.length) {
       empty.hidden = false;
-      empty.innerHTML = `<div class="empty__emoji">🧐</div><h3>Nothing matches these filters</h3><p>Try another category or turn off "Outdoor only".</p>`;
+      empty.innerHTML = `<div class="empty__emoji">🧐</div><h3>${esc(t("empty.noFilter.title"))}</h3><p>${esc(t("empty.noFilter.body"))}</p>`;
       return;
     }
     empty.hidden = true;
@@ -519,7 +546,7 @@
   }
 
   function agendaDayLabel(key) {
-    return key === "Anytime" ? "Anytime / flexible" : fmtDay(key);
+    return key === "Anytime" ? t("agenda.anytime") : fmtDay(key);
   }
 
   function googleCalendarUrl(item) {
@@ -692,7 +719,7 @@
     keys.forEach((key) => {
       const dayBlock = el("div", "agenda__day");
       const label    = agendaDayLabel(key);
-      const head     = el("h3", "agenda__date", `${esc(label)} <span class="pill">${groups[key].length} planned</span>`);
+      const head     = el("h3", "agenda__date", `${esc(label)} <span class="pill">${t("agenda.planned", { count: groups[key].length })}</span>`);
       dayBlock.appendChild(head);
 
       groups[key].forEach((it) => {
@@ -712,8 +739,8 @@
           gcal.href = gcalUrl;
           gcal.target = "_blank";
           gcal.rel = "noopener";
-          gcal.title = "Add to Google Calendar";
-          gcal.innerHTML = "📅 GCal";
+          gcal.title = t("agenda.gcalTitle");
+          gcal.innerHTML = t("agenda.gcal");
           actions.append(gcal);
         }
         const mapsUrl = googleMapsUrl(it);
@@ -722,17 +749,17 @@
           mapsLink.href = mapsUrl;
           mapsLink.target = "_blank";
           mapsLink.rel = "noopener";
-          mapsLink.title = "Open in Google Maps";
-          mapsLink.innerHTML = "🌎 Location";
-          const copyMap = el("button", "btn btn--ghost btn--compact", "🔗 Link");
+          mapsLink.title = t("card.mapsTitle");
+          mapsLink.innerHTML = t("card.location");
+          const copyMap = el("button", "btn btn--ghost btn--compact", t("card.link"));
           copyMap.type = "button";
-          copyMap.title = "Copy Google Maps link";
+          copyMap.title = t("card.linkTitle");
           copyMap.addEventListener("click", async () => {
             try {
               await copyText(mapsUrl);
-              toast("Google Maps link copied");
+              toast(t("toast.mapsCopied"));
             } catch {
-              toast("Could not copy link");
+              toast(t("toast.mapsCopyFail"));
             }
           });
           actions.append(mapsLink, copyMap);
@@ -815,12 +842,46 @@
     renderPaletteGrid();
   }
 
+  function renderLanguagePicker() {
+    const wrap = $("#language-options");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    I18N.SUPPORTED.forEach((code) => {
+      const btn = el("button", `language-option${getLang() === code ? " is-active" : ""}`);
+      btn.type = "button";
+      btn.dataset.lang = code;
+      btn.setAttribute("role", "radio");
+      btn.setAttribute("aria-checked", getLang() === code ? "true" : "false");
+      btn.textContent = t(`params.lang.${code}`);
+      btn.addEventListener("click", () => {
+        applyLanguage(code);
+        toast(t("toast.lang", { label: t(`params.lang.${code}`) }));
+      });
+      wrap.appendChild(btn);
+    });
+  }
+
+  function applyLanguage(lang, { save = true, reload = true } = {}) {
+    I18N.setLang(lang);
+    if (save) localStorage.setItem(LS.lang, lang);
+    renderLanguagePicker();
+    I18N.applyStatic();
+    loadCategories().then(() => {
+      renderChips();
+      renderHero();
+      renderPinnedChips();
+      renderWarnings();
+      renderActivePanel();
+    });
+    if (reload && state.pins.length) reloadSelection();
+  }
+
   function renderPaletteGrid() {
     const grid = $("#palette-grid");
     if (!grid) return;
 
     if (!state.themePalettes.length) {
-      grid.innerHTML = `<p class="params__note">Could not load color themes.</p>`;
+      grid.innerHTML = `<p class="params__note">${esc(t("params.theme.loadError"))}</p>`;
       return;
     }
 
@@ -843,13 +904,14 @@
         <span class="palette-option__label">${esc(pal.label)}</span>`;
       btn.addEventListener("click", () => {
         applyPalette(pal.id);
-        toast(`Theme: ${pal.label}`);
+        toast(t("toast.theme", { label: pal.label }));
       });
       grid.appendChild(btn);
     });
   }
 
   function renderParameters() {
+    renderLanguagePicker();
     renderPaletteGrid();
 
     const container = $("#params-fields");
@@ -860,11 +922,8 @@
     container.innerHTML = "";
 
     if (!state.keySpecs.length) {
-      container.innerHTML = `<p class="params__note">Could not load API key settings. Check your connection and try again.</p>`;
-      if (note) {
-        note.textContent =
-          "Color theme is saved in this browser. API keys are sent with discover requests when configured.";
-      }
+      container.innerHTML = `<p class="params__note">${esc(t("params.keys.loadError"))}</p>`;
+      if (note) note.textContent = t("params.note.keysOnly");
       return;
     }
 
@@ -896,11 +955,7 @@
       container.appendChild(field);
     });
 
-    if (note) {
-      note.textContent =
-        "Color theme and keys are saved in this browser only. Keys are sent with discover requests; " +
-        "a server-side key (Docker/env) is used when the field is left empty.";
-    }
+    if (note) note.textContent = t("params.note");
   }
 
   function collectParamsFromForm() {
@@ -924,7 +979,7 @@
   function renderChips() {
     const wrap = $("#category-chips");
     wrap.innerHTML = "";
-    const all = el("button", `chip ${state.filters.category === "all" ? "is-active" : ""}`, "✨ All");
+    const all = el("button", `chip ${state.filters.category === "all" ? "is-active" : ""}`, t("filter.all"));
     all.addEventListener("click", () => setCategory("all"));
     wrap.appendChild(all);
     state.categories.forEach((c) => {
@@ -969,7 +1024,7 @@
       const city = group.city;
 
       if (collapse) {
-        const removeLabel = `${city} (${group.pins.length} postal codes)`;
+        const removeLabel = t("pin.removeGroup", { city, count: group.pins.length });
         const chip = el("div", `pin-chip pin-chip--group${!loaded ? " is-loading" : ""}`, "");
         chip.innerHTML = `
           <span class="pin-chip__dot${!loaded ? " is-loading" : ""}"></span>
@@ -985,7 +1040,7 @@
       group.pins.forEach((pin) => {
         const pinLoaded = Boolean(state.pinData[pin.id]);
         const code = pin.postcode || "";
-        const removeLabel = code ? `${city} (${code})` : city;
+        const removeLabel = code ? t("pin.remove", { label: `${city} (${code})` }) : t("pin.remove", { label: city });
         const chip = el("div", `pin-chip${!pinLoaded ? " is-loading" : ""}`, "");
         chip.innerHTML = `
           <span class="pin-chip__dot${!pinLoaded ? " is-loading" : ""}"></span>
@@ -1016,7 +1071,7 @@
   function addPin(suggestion) {
     const pin = suggestionToPin(suggestion);
     if (state.pins.some((p) => p.id === pin.id)) {
-      toast(`${pinLabel(pin)} is already pinned`);
+      toast(t("toast.alreadyPinned", { label: pinLabel(pin) }));
       closeDropdown();
       return;
     }
@@ -1030,7 +1085,7 @@
   async function resolvePostcodeSuggestion(code, parent) {
     const clean = String(code).trim();
     if (!clean) return null;
-    const res = await fetch(`${API}/api/geocode?q=${encodeURIComponent(clean)}`);
+      const res = await fetch(`${API}/api/geocode?${appendLangToSearchParams(new URLSearchParams({ q: clean }))}`);
     if (!res.ok) throw new Error("Lookup failed");
     const data = await res.json();
     const suggestions = data.suggestions || [];
@@ -1047,26 +1102,26 @@
     const clean = String(code).trim();
     if (!clean) return false;
     if (isPostcodePinned(clean)) {
-      toast(`${clean} is already pinned`);
+      toast(t("toast.alreadyPinned", { label: clean }));
       return false;
     }
     try {
       const pin = await resolvePostcodeSuggestion(clean, parent);
       if (!pin) {
-        toast(`Could not find postal code ${clean}`);
+        toast(t("toast.postcodeNotFound", { code: clean }));
         return false;
       }
       state.pins.push(pin);
       if (reload) {
         setTab("discover");
         await reloadSelection();
-        toast(`Pinned ${clean}`);
+        toast(t("toast.pinned", { code: clean }));
         const query = $("#city-input").value.trim();
         if (query.length >= 2) fetchSuggestions(query);
       }
       return true;
     } catch {
-      toast(`Could not pin postal code ${clean}`);
+      toast(t("toast.postcodePinFail", { code: clean }));
       return false;
     }
   }
@@ -1074,7 +1129,7 @@
   async function addAllPostcodesFromArea(area) {
     const codes = (area.postcodes || []).filter((code) => !isPostcodePinned(code));
     if (!codes.length) {
-      toast(`${area.name} is already fully pinned`);
+      toast(t("toast.areaFullyPinned", { city: area.name }));
       closeDropdown();
       return;
     }
@@ -1082,7 +1137,7 @@
     closeDropdown();
     $("#city-input").value = "";
     setTab("discover");
-    showLoading(true, `Pinning ${area.name}…`);
+    showLoading(true, t("loading.pinCity", { city: area.name }));
 
     try {
       const resolved = await Promise.all(
@@ -1103,12 +1158,14 @@
       }
 
       if (!added) {
-        toast(`Could not pin postal codes for ${area.name}`);
+        toast(t("toast.areaPinFail", { city: area.name }));
         return;
       }
 
       await reloadSelection();
-      toast(`Pinned ${added} postal code${added === 1 ? "" : "s"} for ${area.name}`);
+      toast(added === 1
+        ? t("toast.areaPinned", { count: added, city: area.name })
+        : t("toast.areaPinnedPlural", { count: added, city: area.name }));
     } finally {
       showLoading(false);
     }
@@ -1131,8 +1188,9 @@
     if (acController) acController.abort();
     acController = new AbortController();
     try {
+      const sp = appendLangToSearchParams(new URLSearchParams({ q: query, count: "8" }));
       const res  = await fetch(
-        `${API}/api/geocode?q=${encodeURIComponent(query)}&count=8`,
+        `${API}/api/geocode?${sp}`,
         { signal: acController.signal }
       );
       if (!res.ok) { closeDropdown(); return; }
@@ -1172,10 +1230,10 @@
               <div class="ac-item__meta">${esc([s.admin1, s.country].filter(Boolean).join(", "))}</div>
             </div>
             <button type="button" class="ac-item__pin-all" ${fullyPinned ? "disabled" : ""}>
-              ${fullyPinned ? "✓ All pinned" : `+ Pin all (${codes.length})`}
+              ${fullyPinned ? esc(t("ac.allPinned")) : esc(t("ac.pinAll", { count: codes.length }))}
             </button>
           </div>
-          <div class="ac-item__hint">Press Enter to pin the whole agglomeration, or pick individual codes below</div>
+          <div class="ac-item__hint">${esc(t("ac.hint"))}</div>
           <div class="ac-item__codes">${codeBtns}</div>`;
 
         const pinAll = li.querySelector(".ac-item__pin-all:not(:disabled)");
@@ -1204,7 +1262,7 @@
             <div class="ac-item__name">${esc(label)}</div>
             <div class="ac-item__meta">${esc([s.admin1, s.country].filter(Boolean).join(", "))}</div>
           </div>
-          <button class="ac-item__pin" type="button" ${isPinned ? "disabled" : ""}>${isPinned ? "✓ Pinned" : "+ Pin"}</button>`;
+          <button class="ac-item__pin" type="button" ${isPinned ? "disabled" : ""}>${isPinned ? esc(t("ac.pinned")) : esc(t("ac.pin"))}</button>`;
 
         if (!isPinned) {
           li.querySelector(".ac-item__pin").addEventListener("click", (e) => { e.stopPropagation(); addPin(s); });
@@ -1249,7 +1307,7 @@
   /* ── data loading ────────────────────────────────────────────────────── */
   async function loadCategories() {
     try {
-      const res  = await fetch(`${API}/api/categories`);
+      const res  = await fetch(`${API}/api/categories?lang=${encodeURIComponent(getLang())}`);
       const data = await res.json();
       state.categories = data.categories || [];
     } catch { state.categories = []; }
@@ -1258,11 +1316,11 @@
 
   async function fetchDiscoverForPin(pin) {
     const placeName = pin.postcode ? `${pin.postcode} · ${pin.name}` : pin.name;
-    const sp = appendApiKeysToSearchParams(new URLSearchParams({
+    const sp = appendLangToSearchParams(appendApiKeysToSearchParams(new URLSearchParams({
       lat: String(pin.latitude),
       lon: String(pin.longitude),
       place_name: placeName,
-    }));
+    })));
     const res = await fetch(`${API}/api/discover?${sp}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -1291,7 +1349,7 @@
     renderWarnings();
     renderActivePanel();
 
-    const loadingTimer = setTimeout(() => showLoading(true, "Updating results…"), 220);
+    const loadingTimer = setTimeout(() => showLoading(true, t("loading.updating")), 220);
 
     try {
       const results = await Promise.all(
@@ -1326,7 +1384,7 @@
         failed.forEach((pin) => {
           const idx = state.pins.findIndex((p) => p.id === pin.id);
           if (idx !== -1) state.pins.splice(idx, 1);
-          toast(`Could not load ${pinLabel(pin)}`);
+          toast(t("toast.loadPinFail", { label: pinLabel(pin) }));
         });
         prunePinData();
         savePins();
@@ -1355,10 +1413,10 @@
   /** Load by city name string (legacy path & form fallback — geocodes on the server). */
   async function loadCityName(city) {
     const loadingTimer = setTimeout(
-      () => showLoading(true, `Finding cool things to do in ${city}…`), 220
+      () => showLoading(true, t("loading.city", { city })), 220
     );
     try {
-      const sp = appendApiKeysToSearchParams(new URLSearchParams({ city }));
+      const sp = appendLangToSearchParams(appendApiKeysToSearchParams(new URLSearchParams({ city })));
       const res = await fetch(`${API}/api/discover?${sp}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1384,7 +1442,7 @@
       renderWarnings();
       renderActivePanel();
     } catch (e) {
-      toast(e.message || "Something went wrong");
+      toast(e.message || t("toast.error"));
     } finally {
       clearTimeout(loadingTimer);
       showLoading(false);
@@ -1444,7 +1502,7 @@
         setTab("discover");
         closeDropdown();
         if (isPostcodePinned(query)) {
-          toast(`${query} is already pinned`);
+          toast(t("toast.alreadyPinned", { label: query }));
           return;
         }
         state.pins = [];
@@ -1486,7 +1544,7 @@
         e.preventDefault();
         const last = state.pins[state.pins.length - 1];
         removePin(last.id);
-        toast(`Removed ${pinLabel(last)}`);
+        toast(t("toast.pinRemoved", { label: pinLabel(last) }));
         return;
       }
 
@@ -1528,9 +1586,9 @@
       if (!Object.keys(agenda()).length) return;
       try {
         await copyText(buildAgendaPlainText());
-        toast("Agenda copied as plain text");
+        toast(t("toast.agendaCopied"));
       } catch {
-        toast("Could not copy agenda");
+        toast(t("toast.agendaCopyFail"));
       }
     });
 
@@ -1538,20 +1596,20 @@
       if (!Object.keys(agenda()).length) return;
       const stamp = new Date().toISOString().slice(0, 10);
       downloadFile(`citychilly-agenda-${stamp}.ics`, buildAgendaICS(), "text/calendar;charset=utf-8");
-      toast("Calendar file downloaded");
+      toast(t("toast.icsDownloaded"));
     });
 
     $("#agenda-download-json").addEventListener("click", () => {
       if (!Object.keys(agenda()).length) return;
       const stamp = new Date().toISOString().slice(0, 10);
       downloadFile(`citychilly-agenda-${stamp}.json`, buildAgendaJSON(), "application/json;charset=utf-8");
-      toast("JSON file downloaded");
+      toast(t("toast.jsonDownloaded"));
     });
 
     $("#params-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       saveParams(collectParamsFromForm());
-      toast("Parameters saved");
+      toast(t("toast.paramsSaved"));
       if (state.pins.length) {
         await reloadSelection();
         setTab("discover");
@@ -1564,7 +1622,7 @@
         const input = document.getElementById(`param-${spec.id}`);
         if (input) input.value = "";
       });
-      toast("API keys cleared");
+      toast(t("toast.keysCleared"));
       if (state.pins.length) await reloadSelection();
     });
   }
@@ -1584,6 +1642,11 @@
       state.activePalette = savedPalette;
     }
 
+    const savedLang = readString(LS.lang);
+    const browserLang = navigator.language?.toLowerCase().startsWith("fr") ? "fr" : "en";
+    I18N.setLang(savedLang || browserLang);
+    I18N.applyStatic();
+
     let theme = readString(LS.theme);
     if (theme !== "light" && theme !== "dark") {
       theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -1595,12 +1658,13 @@
     updateAgendaExportBar();
     loadCategories();
     Promise.all([loadThemePalettes(), loadKeySpecs()]).then(() => {
-      const saved = readString(LS.palette);
-      if (saved && state.themePalettes.some((p) => p.id === saved)) {
-        applyPalette(saved, { save: false });
+      const savedPal = readString(LS.palette);
+      if (savedPal && state.themePalettes.some((p) => p.id === savedPal)) {
+        applyPalette(savedPal, { save: false });
       } else if (state.serverPalette) {
         state.activePalette = state.serverPalette;
       }
+      renderLanguagePicker();
       renderParameters();
     });
 
