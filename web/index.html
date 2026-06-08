@@ -121,9 +121,14 @@
     <section class="panel" id="panel-parameters" role="tabpanel">
       <div class="panel__head">
         <h2>Parameters</h2>
-        <p class="panel__hint">Optional API keys stored on this device. Used when fetching live data.</p>
+        <p class="panel__hint">Color themes and optional API keys — all saved on this device.</p>
       </div>
       <form id="params-form" class="params" autocomplete="off">
+        <div id="params-theme" class="params-theme">
+          <h3 class="params-theme__title">Color theme</h3>
+          <p class="params-theme__desc">Pick a palette for accents and surfaces. Applies immediately.</p>
+          <div id="palette-grid" class="palette-grid" role="radiogroup" aria-label="Color theme"></div>
+        </div>
         <div id="params-fields" class="params__fields"></div>
         <div class="params__actions">
           <button type="submit" class="btn btn--primary">Save &amp; refresh</button>

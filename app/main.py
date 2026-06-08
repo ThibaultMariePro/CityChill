@@ -99,10 +99,12 @@ async def geocode_suggest(
 
 
 @app.get("/api/theme.css")
-async def theme_css() -> Response:
+async def theme_css(
+    palette: str | None = Query(default=None, max_length=40, pattern=r"^[a-z0-9\-]+$"),
+) -> Response:
     """Palette CSS generated from config/theme.json (overrides styles.css)."""
     return Response(
-        content=generate_css(),
+        content=generate_css(palette),
         media_type="text/css",
         headers={"Cache-Control": "no-cache, must-revalidate"},
     )

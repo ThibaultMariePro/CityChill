@@ -76,10 +76,21 @@ def active_palette(config: dict | None = None) -> tuple[str, dict]:
 
 def list_palettes(config: dict | None = None) -> list[dict]:
     config = config or load_config()
-    return [
-        {"id": pid, "label": pal.get("label", pid.title())}
-        for pid, pal in config.get("palettes", {}).items()
-    ]
+    out: list[dict] = []
+    for pid, pal in config.get("palettes", {}).items():
+        brand = pal.get("brand", {})
+        out.append(
+            {
+                "id": pid,
+                "label": pal.get("label", pid.title()),
+                "preview": [
+                    brand.get("coral"),
+                    brand.get("amber"),
+                    brand.get("plum"),
+                ],
+            }
+        )
+    return out
 
 
 def _emit_vars(mapping: dict) -> str:
@@ -95,10 +106,15 @@ def _emit_vars(mapping: dict) -> str:
     return "\n".join(lines)
 
 
-def generate_css() -> str:
+def generate_css(palette_id: str | None = None) -> str:
     """Build the CSS that recolors the app for the active palette."""
     config = load_config()
-    pid, palette = active_palette(config)
+    palettes = config.get("palettes", {})
+    if palette_id and palette_id in palettes:
+        pid = palette_id
+        palette = palettes[pid]
+    else:
+        pid, palette = active_palette(config)
     label = palette.get("label", pid)
     config_path = Path(settings.THEME_CONFIG_PATH)
 

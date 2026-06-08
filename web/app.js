@@ -12,6 +12,7 @@
     favorites: "citychilly:favorites",
     agenda:    "citychilly:agenda",
     params:           "citychilly:params",
+    palette:          "citychilly:palette",
     dismissedNotices: "citychilly:dismissedNotices",
   };
 
@@ -25,6 +26,9 @@
     filters: { category: "all", kind: "all", outdoorOnly: false },
     tab: "discover",
     keySpecs: [],
+    themePalettes: [],
+    activePalette: null,
+    serverPalette: null,
   };
 
   // Autocomplete state
@@ -777,7 +781,77 @@
     } catch { /* offline or API unavailable */ }
   }
 
+  async function loadThemePalettes() {
+    if (state.themePalettes.length) return;
+    try {
+      const res = await fetch(`${API}/api/theme`);
+      if (!res.ok) return;
+      const data = await res.json();
+      state.themePalettes = data.palettes || [];
+      state.serverPalette = data.active || null;
+    } catch { /* offline or API unavailable */ }
+  }
+
+  function themeCssUrl(paletteId) {
+    if (!paletteId) return `${API}/api/theme.css`;
+    return `${API}/api/theme.css?palette=${encodeURIComponent(paletteId)}`;
+  }
+
+  function applyPalette(paletteId, { save = true } = {}) {
+    if (!paletteId) return;
+    const link = document.querySelector('link[href*="/api/theme.css"]');
+    if (link) link.href = themeCssUrl(paletteId);
+
+    state.activePalette = paletteId;
+    if (save) localStorage.setItem(LS.palette, paletteId);
+
+    const pal = state.themePalettes.find((p) => p.id === paletteId);
+    const accent = pal?.preview?.[0];
+    if (accent) {
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.content = accent;
+    }
+
+    renderPaletteGrid();
+  }
+
+  function renderPaletteGrid() {
+    const grid = $("#palette-grid");
+    if (!grid) return;
+
+    if (!state.themePalettes.length) {
+      grid.innerHTML = `<p class="params__note">Could not load color themes.</p>`;
+      return;
+    }
+
+    const active = state.activePalette || state.serverPalette;
+    grid.innerHTML = "";
+
+    state.themePalettes.forEach((pal) => {
+      const colors = (pal.preview || []).filter(Boolean);
+      const gradient = colors.length >= 2
+        ? `linear-gradient(135deg, ${colors.join(", ")})`
+        : (colors[0] || "var(--coral)");
+      const btn = el("button", `palette-option${pal.id === active ? " is-active" : ""}`);
+      btn.type = "button";
+      btn.dataset.palette = pal.id;
+      btn.setAttribute("role", "radio");
+      btn.setAttribute("aria-checked", pal.id === active ? "true" : "false");
+      btn.setAttribute("aria-label", pal.label);
+      btn.innerHTML = `
+        <span class="palette-option__swatch" style="background:${gradient}"></span>
+        <span class="palette-option__label">${esc(pal.label)}</span>`;
+      btn.addEventListener("click", () => {
+        applyPalette(pal.id);
+        toast(`Theme: ${pal.label}`);
+      });
+      grid.appendChild(btn);
+    });
+  }
+
   function renderParameters() {
+    renderPaletteGrid();
+
     const container = $("#params-fields");
     const note = $("#params-note");
     if (!container) return;
@@ -787,6 +861,10 @@
 
     if (!state.keySpecs.length) {
       container.innerHTML = `<p class="params__note">Could not load API key settings. Check your connection and try again.</p>`;
+      if (note) {
+        note.textContent =
+          "Color theme is saved in this browser. API keys are sent with discover requests when configured.";
+      }
       return;
     }
 
@@ -820,8 +898,8 @@
 
     if (note) {
       note.textContent =
-        "Keys are saved in this browser only and sent with discover requests. " +
-        "A server-side key (Docker/env) is used when the field is left empty.";
+        "Color theme and keys are saved in this browser only. Keys are sent with discover requests; " +
+        "a server-side key (Docker/env) is used when the field is left empty.";
     }
   }
 
@@ -1499,6 +1577,13 @@
   }
 
   function init() {
+    const savedPalette = readString(LS.palette);
+    if (savedPalette) {
+      const link = document.querySelector('link[href*="/api/theme.css"]');
+      if (link) link.href = themeCssUrl(savedPalette);
+      state.activePalette = savedPalette;
+    }
+
     let theme = readString(LS.theme);
     if (theme !== "light" && theme !== "dark") {
       theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -1509,7 +1594,15 @@
     refreshCounts();
     updateAgendaExportBar();
     loadCategories();
-    loadKeySpecs().then(() => renderParameters());
+    Promise.all([loadThemePalettes(), loadKeySpecs()]).then(() => {
+      const saved = readString(LS.palette);
+      if (saved && state.themePalettes.some((p) => p.id === saved)) {
+        applyPalette(saved, { save: false });
+      } else if (state.serverPalette) {
+        state.activePalette = state.serverPalette;
+      }
+      renderParameters();
+    });
 
     // Restore pinned locations (new format) or fall back to legacy lastCity
     const savedPins = readPins();
