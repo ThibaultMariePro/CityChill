@@ -23,30 +23,40 @@
         <span class="brand__name">City<span class="brand__accent">Chilly</span></span>
       </a>
 
-      <form id="search-form" class="search" role="search">
+      <form id="search-form" class="search" role="search" aria-label="Location search">
         <span class="search__icon" aria-hidden="true">🔍</span>
         <input
           id="city-input"
           class="search__input"
           type="text"
           name="city"
-          placeholder="Search a city (e.g. Nantes, Lisbon, Kyoto)…"
+          placeholder="City or postal code…"
           autocomplete="off"
           spellcheck="false"
+          role="combobox"
+          aria-expanded="false"
+          aria-haspopup="listbox"
+          aria-controls="autocomplete-list"
+          aria-autocomplete="list"
         />
         <button class="search__btn" type="submit">Explore</button>
+        <ul id="autocomplete-list" class="autocomplete" role="listbox" aria-label="Location suggestions" hidden></ul>
       </form>
 
       <button id="theme-toggle" class="icon-btn" title="Toggle light / dark" aria-label="Toggle light / dark">
         <span class="theme-toggle__icon">🌙</span>
       </button>
     </div>
+    <!-- Pinned locations bar — shown when ≥1 location is pinned -->
+    <div id="pinned-bar" class="pinned-bar" hidden aria-label="Pinned locations">
+      <div id="pinned-chips" class="pinned-bar__chips"></div>
+    </div>
   </header>
 
   <main class="layout">
     <section class="hero" id="hero">
       <div class="hero__text">
-        <p class="hero__eyebrow">Now exploring</p>
+        <p class="hero__eyebrow" id="place-eyebrow">Now exploring</p>
         <h1 class="hero__title" id="place-name">Nantes</h1>
         <p class="hero__subtitle" id="place-sub">France</p>
       </div>

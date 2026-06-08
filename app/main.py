@@ -13,10 +13,10 @@ from app import __version__
 from app.cache import TTLCache
 from app.categories import CATEGORIES
 from app.config import settings
-from app.models import DiscoverResponse, Item, Weather, WeatherHint
+from app.models import DiscoverResponse, Item, Place, Weather, WeatherHint
 from app.providers.activities import get_activities
 from app.providers.events import get_events
-from app.providers.geocode import geocode_city
+from app.providers.geocode import _make_pin_id, geocode_city, search_places
 from app.providers.weather import get_weather
 from app.theme import active_palette, generate_css, list_palettes
 
@@ -68,6 +68,26 @@ async def health() -> dict:
     }
 
 
+@app.get("/api/geocode")
+async def geocode_suggest(
+    q: str = Query(..., min_length=1, max_length=200),
+    count: int = Query(default=8, ge=1, le=15),
+) -> dict:
+    """Return autocomplete suggestions for a city name or postal code."""
+    q = q.strip()
+    cache_key = f"geocode::{q.lower()}::{count}"
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
+    try:
+        suggestions = await search_places(q, count)
+        result: dict = {"suggestions": [s.model_dump() for s in suggestions]}
+    except Exception:
+        result = {"suggestions": []}
+    cache.set(cache_key, result)
+    return result
+
+
 @app.get("/api/theme.css")
 async def theme_css() -> Response:
     """Palette CSS generated from config/theme.json (overrides styles.css)."""
@@ -100,22 +120,43 @@ async def categories() -> dict:
 
 @app.get("/api/discover", response_model=DiscoverResponse)
 async def discover(
-    city: str = Query(default=settings.DEFAULT_CITY, min_length=1, max_length=120),
+    city: str | None = Query(default=None, min_length=1, max_length=120),
     country: str | None = Query(default=None, max_length=120),
+    lat: float | None = Query(default=None, ge=-90.0, le=90.0),
+    lon: float | None = Query(default=None, ge=-180.0, le=180.0),
+    place_name: str | None = Query(default=None, max_length=200),
 ) -> DiscoverResponse:
-    cache_key = f"discover::{city.lower().strip()}::{(country or '').lower().strip()}"
-    cached = cache.get(cache_key)
-    if cached:
-        return cached
-
-    try:
-        place = await geocode_city(city, country)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    except Exception:
-        raise HTTPException(
-            status_code=502, detail="City lookup service is temporarily unavailable."
+    # ── Coordinate-based path (skips geocoding, used by pinned locations) ──
+    if lat is not None and lon is not None:
+        display = place_name or f"{lat:.3f}, {lon:.3f}"
+        cache_key = f"discover::coords::{_make_pin_id(lat, lon)}"
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+        place = Place(
+            name=display,
+            latitude=lat,
+            longitude=lon,
+            source_url=f"https://www.openstreetmap.org/#map=13/{lat}/{lon}",
         )
+
+    # ── City-name path (geocodes on the server, backward-compatible) ──
+    else:
+        effective_city = (city or "").strip() or settings.DEFAULT_CITY
+        cache_key = (
+            f"discover::{effective_city.lower()}::{(country or '').lower().strip()}"
+        )
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+        try:
+            place = await geocode_city(effective_city, country)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        except Exception:
+            raise HTTPException(
+                status_code=502, detail="City lookup service is temporarily unavailable."
+            )
 
     weather, activities_result, events_result = await asyncio.gather(
         get_weather(place.latitude, place.longitude),

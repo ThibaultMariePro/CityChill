@@ -60,6 +60,22 @@ class Item(BaseModel):
     weather: WeatherHint | None = None
 
 
+class PlaceSuggestion(BaseModel):
+    """Lightweight geocoding result used by the search autocomplete."""
+
+    id: str  # stable "<lat>,<lon>" string, consistent across name vs. coordinate lookups
+    name: str
+    display: str  # "Nantes, Pays de la Loire, France"
+    country: str | None = None
+    country_code: str | None = None
+    admin1: str | None = None
+    latitude: float
+    longitude: float
+    timezone: str | None = None
+    population: int | None = None
+    postcodes: list[str] = []
+
+
 class DiscoverResponse(BaseModel):
     place: Place
     weather: Weather
