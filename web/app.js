@@ -49,8 +49,13 @@
   };
 
   /* ── pin persistence ─────────────────────────────────────────────────── */
-  /** Stable ID: rounded lat/lon string so autocomplete and city-name lookups agree. */
   const makePinId = (lat, lon) => `${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`;
+  const makePostcodePinId = (code) => `pc:${String(code).trim()}`;
+  const looksLikePostcode = (q) => /^\d{4,6}$/.test(String(q).trim());
+
+  function isPostcodePinned(code) {
+    return state.pins.some((p) => p.id === makePostcodePinId(code));
+  }
 
   function readPins() {
     try {
@@ -65,11 +70,27 @@
     localStorage.setItem(
       LS.pins,
       JSON.stringify(
-        state.pins.map(({ id, name, display, latitude, longitude, postcodes }) => ({
-          id, name, display: display || name, latitude, longitude, postcodes: postcodes || [],
+        state.pins.map(({ id, name, display, latitude, longitude, postcode, postcodes, kind }) => ({
+          id,
+          name,
+          display: display || name,
+          latitude,
+          longitude,
+          postcode: postcode || null,
+          postcodes: postcodes || (postcode ? [postcode] : []),
+          kind: kind || (postcode ? "postcode" : "place"),
         }))
       )
     );
+  }
+
+  function pinLabel(pin) {
+    return pin.postcode || pin.name;
+  }
+
+  function pinSubtitle(pin) {
+    if (pin.postcode && pin.name && pin.name !== pin.postcode) return pin.name;
+    return pin.display || "";
   }
 
   /* ── helpers ─────────────────────────────────────────────────────────── */
@@ -118,7 +139,13 @@
     const loaded = state.pins.filter((p) => state.pinData[p.id]);
     if (!loaded.length) return;
     const eyebrow = $("#place-eyebrow");
-    if (loaded.length === 1) {
+    const codes = loaded.map((p) => p.postcode).filter(Boolean);
+    if (codes.length) {
+      $("#place-name").textContent = codes.join(" · ");
+      const places = [...new Set(loaded.map((p) => p.name).filter(Boolean))];
+      $("#place-sub").textContent = places.join(" · ");
+      if (eyebrow) eyebrow.textContent = "Postal codes in scope";
+    } else if (loaded.length === 1) {
       const place = state.pinData[loaded[0].id].place;
       $("#place-name").textContent = place.name;
       $("#place-sub").textContent  = [place.admin, place.country].filter(Boolean).join(", ");
@@ -267,9 +294,12 @@
     grid.innerHTML = "";
     const items   = filteredItems();
     const loaded  = state.pins.filter((p) => state.pinData[p.id]);
-    const locText = loaded.length > 1
-      ? `${loaded.length} locations`
-      : (loaded[0] ? state.pinData[loaded[0].id].place.name : "your city");
+    const codes = loaded.map((p) => p.postcode).filter(Boolean);
+    const locText = codes.length
+      ? codes.join(", ")
+      : loaded.length > 1
+        ? `${loaded.length} locations`
+        : (loaded[0] ? state.pinData[loaded[0].id].place.name : "your city");
 
     meta.textContent = `${items.length} result${items.length === 1 ? "" : "s"} in ${locText}`;
 
@@ -380,30 +410,81 @@
     container.innerHTML = "";
 
     state.pins.forEach((pin) => {
-      const loaded    = Boolean(state.pinData[pin.id]);
-      const firstCode = pin.postcodes?.[0] || "";
+      const loaded = Boolean(state.pinData[pin.id]);
+      const label  = pinLabel(pin);
+      const sub    = pin.postcode ? pinSubtitle(pin) : "";
       const chip = el("div", `pin-chip${!loaded ? " is-loading" : ""}`, "");
       chip.innerHTML = `
         <span class="pin-chip__dot${!loaded ? " is-loading" : ""}"></span>
-        <span class="pin-chip__name">${esc(pin.name)}</span>
-        ${firstCode ? `<span class="pin-chip__code">${esc(firstCode)}</span>` : ""}
-        <button class="pin-chip__remove" type="button" title="Remove ${esc(pin.name)}" aria-label="Remove ${esc(pin.name)}">×</button>`;
+        <span class="pin-chip__name">${esc(label)}</span>
+        ${sub && sub !== label ? `<span class="pin-chip__sub">${esc(sub)}</span>` : ""}
+        <button class="pin-chip__remove" type="button" title="Remove ${esc(label)}" aria-label="Remove ${esc(label)}">×</button>`;
       chip.querySelector(".pin-chip__remove").addEventListener("click", () => removePin(pin.id));
       container.appendChild(chip);
     });
   }
 
+  function suggestionToPin(suggestion) {
+    const postcode = suggestion.postcode || suggestion.postcodes?.[0] || null;
+    const id = postcode ? makePostcodePinId(postcode) : suggestion.id;
+    return {
+      id,
+      kind: suggestion.kind || (postcode ? "postcode" : "place"),
+      postcode,
+      name: suggestion.name,
+      display: suggestion.display || suggestion.name,
+      latitude: suggestion.latitude,
+      longitude: suggestion.longitude,
+      postcodes: postcode ? [postcode] : (suggestion.postcodes || []),
+    };
+  }
+
   function addPin(suggestion) {
-    if (state.pins.some((p) => p.id === suggestion.id)) {
-      toast(`${suggestion.name} is already pinned`);
+    const pin = suggestionToPin(suggestion);
+    if (state.pins.some((p) => p.id === pin.id)) {
+      toast(`${pinLabel(pin)} is already pinned`);
       closeDropdown();
       return;
     }
-    state.pins.push(suggestion);
+    state.pins.push(pin);
     renderPinnedChips();
     closeDropdown();
     $("#city-input").value = "";
-    loadPlace(suggestion);
+    loadPlace(pin);
+  }
+
+  async function addPinFromPostcode(code, parent) {
+    const clean = String(code).trim();
+    if (!clean) return;
+    if (isPostcodePinned(clean)) {
+      toast(`${clean} is already pinned`);
+      return;
+    }
+    try {
+      const res = await fetch(`${API}/api/geocode?q=${encodeURIComponent(clean)}`);
+      if (!res.ok) throw new Error("Lookup failed");
+      const data = await res.json();
+      const suggestions = data.suggestions || [];
+      const match = suggestions.find((s) => s.kind === "postcode" || s.postcode === clean) || suggestions[0];
+      if (!match) {
+        toast(`Could not find postal code ${clean}`);
+        return;
+      }
+      const pin = suggestionToPin(match);
+      if (parent?.name && pin.postcode) {
+        pin.display = `${pin.postcode} · ${parent.name}`;
+      }
+      state.pins.push(pin);
+      savePins();
+      renderPinnedChips();
+      await loadPlace(pin);
+      toast(`Pinned ${clean}`);
+      // Keep dropdown open so user can pin more codes from the same city.
+      const query = $("#city-input").value.trim();
+      if (query.length >= 2) fetchSuggestions(query);
+    } catch {
+      toast(`Could not pin postal code ${clean}`);
+    }
   }
 
   function removePin(id) {
@@ -444,28 +525,52 @@
     acFocused = -1;
 
     suggestions.forEach((s) => {
-      const isPinned = state.pins.some((p) => p.id === s.id);
+      const isArea = s.kind === "area" && (s.postcodes || []).length > 1;
       const li = document.createElement("li");
-      li.className = `ac-item${isPinned ? " is-pinned" : ""}`;
+      li.className = `ac-item${isArea ? " ac-item--area" : ""}`;
       li.setAttribute("role", "option");
-      li.setAttribute("aria-selected", isPinned ? "true" : "false");
 
-      const codes = (s.postcodes || []).slice(0, 6);
-      const more  = (s.postcodes || []).length > 6 ? ` <span class="ac-item__more">+${s.postcodes.length - 6}</span>` : "";
-      const codeTags = codes.map((c) => `<span class="ac-item__code-tag">${esc(c)}</span>`).join("");
+      if (isArea) {
+        const codes = s.postcodes || [];
+        const codeBtns = codes.map((code) => {
+          const pinned = isPostcodePinned(code);
+          return `<button type="button" class="ac-item__code-btn${pinned ? " is-pinned" : ""}" data-code="${esc(code)}" ${pinned ? "disabled" : ""}>${pinned ? "✓ " : "+ "}${esc(code)}</button>`;
+        }).join("");
 
-      li.innerHTML = `
-        <div class="ac-item__info">
-          <div class="ac-item__name">${esc(s.name)}</div>
-          <div class="ac-item__meta">${esc([s.admin1, s.country].filter(Boolean).join(", "))}</div>
-          ${codes.length ? `<div class="ac-item__codes">${codeTags}${more}</div>` : ""}
-        </div>
-        <button class="ac-item__pin" type="button" ${isPinned ? "disabled" : ""}>${isPinned ? "✓ Pinned" : "+ Pin"}</button>`;
+        li.innerHTML = `
+          <div class="ac-item__info">
+            <div class="ac-item__name">${esc(s.name)}</div>
+            <div class="ac-item__meta">${esc([s.admin1, s.country].filter(Boolean).join(", "))}</div>
+            <div class="ac-item__hint">Pin individual postal codes — not the whole agglomeration</div>
+            <div class="ac-item__codes">${codeBtns}</div>
+          </div>`;
 
-      if (!isPinned) {
-        li.querySelector(".ac-item__pin").addEventListener("click", (e) => { e.stopPropagation(); addPin(s); });
-        li.addEventListener("click", () => addPin(s));
+        li.querySelectorAll(".ac-item__code-btn:not(:disabled)").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            addPinFromPostcode(btn.dataset.code, s);
+          });
+        });
+      } else {
+        const pin = suggestionToPin(s);
+        const isPinned = state.pins.some((p) => p.id === pin.id);
+        li.classList.toggle("is-pinned", isPinned);
+        li.setAttribute("aria-selected", isPinned ? "true" : "false");
+
+        const label = pin.postcode ? `${pin.postcode} · ${s.name}` : s.name;
+        li.innerHTML = `
+          <div class="ac-item__info">
+            <div class="ac-item__name">${esc(label)}</div>
+            <div class="ac-item__meta">${esc([s.admin1, s.country].filter(Boolean).join(", "))}</div>
+          </div>
+          <button class="ac-item__pin" type="button" ${isPinned ? "disabled" : ""}>${isPinned ? "✓ Pinned" : "+ Pin"}</button>`;
+
+        if (!isPinned) {
+          li.querySelector(".ac-item__pin").addEventListener("click", (e) => { e.stopPropagation(); addPin(s); });
+          li.addEventListener("click", () => addPin(s));
+        }
       }
+
       list.appendChild(li);
     });
 
@@ -485,12 +590,12 @@
   }
 
   function moveFocus(dir) {
-    const items = $$("#autocomplete-list .ac-item:not(.is-pinned)");
+    const items = $$("#autocomplete-list .ac-item:not(.is-pinned) .ac-item__pin, #autocomplete-list .ac-item__code-btn:not(:disabled)");
     if (!items.length) return;
-    items.forEach((i) => i.classList.remove("is-focused"));
+    $$("#autocomplete-list .ac-item").forEach((i) => i.classList.remove("is-focused"));
     acFocused = Math.max(-1, Math.min(items.length - 1, acFocused + dir));
     if (acFocused >= 0) {
-      items[acFocused].classList.add("is-focused");
+      items[acFocused].closest(".ac-item")?.classList.add("is-focused");
       items[acFocused].scrollIntoView({ block: "nearest" });
     }
   }
@@ -513,7 +618,10 @@
       : setTimeout(() => showLoading(true, `Finding cool things to do in ${pin.name}…`), 220);
 
     try {
-      const url = `${API}/api/discover?lat=${pin.latitude}&lon=${pin.longitude}&place_name=${encodeURIComponent(pin.name)}`;
+      const placeName = pin.postcode
+        ? `${pin.postcode} · ${pin.name}`
+        : pin.name;
+      const url = `${API}/api/discover?lat=${pin.latitude}&lon=${pin.longitude}&place_name=${encodeURIComponent(placeName)}`;
       const res = await fetch(url);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -613,17 +721,37 @@
   /* ── events wiring ───────────────────────────────────────────────────── */
   function wire() {
     // Search form submit
-    $("#search-form").addEventListener("submit", (e) => {
+    $("#search-form").addEventListener("submit", async (e) => {
       e.preventDefault();
-      // Prefer the keyboard-focused autocomplete item
-      const focused = $("#autocomplete-list .ac-item.is-focused:not(.is-pinned)");
-      if (focused) { focused.click(); return; }
-      // Fall back to the topmost suggestion if dropdown is visible
-      const first = $("#autocomplete-list .ac-item:not(.is-pinned)");
-      if (first && !$("#autocomplete-list").hidden) { first.click(); return; }
-      // Plain city-name search (legacy + postal code fallback)
-      const city = $("#city-input").value.trim();
-      if (city) { setTab("discover"); closeDropdown(); loadCityName(city); }
+      const query = $("#city-input").value.trim();
+      if (!query) return;
+
+      // Keyboard-focused postcode chip or pin button
+      const focusedBtn = $("#autocomplete-list .ac-item.is-focused .ac-item__code-btn:not(:disabled), #autocomplete-list .ac-item.is-focused .ac-item__pin:not(:disabled)");
+      if (focusedBtn) { focusedBtn.click(); return; }
+
+      // Direct postal-code entry
+      if (looksLikePostcode(query)) {
+        setTab("discover");
+        closeDropdown();
+        await addPinFromPostcode(query);
+        return;
+      }
+
+      // Fall back to the first pinable suggestion if dropdown is visible
+      const firstPin = $("#autocomplete-list .ac-item:not(.ac-item--area):not(.is-pinned) .ac-item__pin:not(:disabled)");
+      if (firstPin && !$("#autocomplete-list").hidden) { firstPin.click(); return; }
+
+      // City search with multiple postcodes — prompt user to pick codes
+      const areaRow = $("#autocomplete-list .ac-item--area");
+      if (areaRow && !$("#autocomplete-list").hidden) {
+        toast("Select the postal codes you want to include");
+        return;
+      }
+
+      setTab("discover");
+      closeDropdown();
+      loadCityName(query);
     });
 
     // Autocomplete input: debounce & fetch

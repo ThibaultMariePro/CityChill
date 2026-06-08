@@ -63,9 +63,11 @@ class Item(BaseModel):
 class PlaceSuggestion(BaseModel):
     """Lightweight geocoding result used by the search autocomplete."""
 
-    id: str  # stable "<lat>,<lon>" string, consistent across name vs. coordinate lookups
+    id: str  # "pc:44100" for a postal code, or "<lat>,<lon>" for a generic place
     name: str
-    display: str  # "Nantes, Pays de la Loire, France"
+    display: str  # "44100 · Nantes" or "Nantes, Pays de la Loire, France"
+    kind: str = "place"  # "postcode" | "area" | "place"
+    postcode: str | None = None  # set when kind == "postcode"
     country: str | None = None
     country_code: str | None = None
     admin1: str | None = None
@@ -73,7 +75,7 @@ class PlaceSuggestion(BaseModel):
     longitude: float
     timezone: str | None = None
     population: int | None = None
-    postcodes: list[str] = []
+    postcodes: list[str] = []  # for kind=="area": selectable codes in the agglomeration
 
 
 class DiscoverResponse(BaseModel):

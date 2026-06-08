@@ -149,6 +149,8 @@ a { color: inherit; }
 .ac-item:hover,
 .ac-item.is-focused { background: var(--surface-2); }
 .ac-item.is-pinned { opacity: .55; pointer-events: none; }
+.ac-item--area { cursor: default; }
+.ac-item--area:hover { background: transparent; }
 
 .ac-item__info { flex: 1; min-width: 0; }
 .ac-item__name { font-weight: 600; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -169,6 +171,35 @@ a { color: inherit; }
   font-weight: 500;
   font-size: .7rem;
   color: var(--coral);
+}
+.ac-item__code-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-weight: 600;
+  font-size: .72rem;
+  color: var(--coral);
+  cursor: pointer;
+  transition: all .15s ease;
+  font-family: inherit;
+}
+.ac-item__code-btn:hover:not(:disabled) {
+  background: var(--coral);
+  border-color: transparent;
+  color: #fff;
+}
+.ac-item__code-btn.is-pinned,
+.ac-item__code-btn:disabled {
+  opacity: .5;
+  cursor: default;
+  background: var(--chip-bg);
+  color: var(--text-soft);
+}
+.ac-item__hint {
+  font-size: .72rem;
+  color: var(--text-soft);
+  margin-top: 4px;
 }
 .ac-item__more { font-size: .7rem; color: var(--text-soft); align-self: center; }
 
@@ -200,6 +231,17 @@ a { color: inherit; }
   backdrop-filter: blur(8px);
   overflow-x: auto;
   scrollbar-width: thin;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pinned-bar__label {
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: .04em;
 }
 .pinned-bar__chips {
   display: flex;
@@ -237,7 +279,12 @@ a { color: inherit; }
 }
 @keyframes pulse { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
 
-.pin-chip__name { font-weight: 600; }
+.pin-chip__name { font-weight: 700; font-variant-numeric: tabular-nums; }
+.pin-chip__sub {
+  font-size: .7rem;
+  color: var(--text-soft);
+  font-weight: 500;
+}
 .pin-chip__code {
   font-size: .7rem;
   color: var(--text-soft);
