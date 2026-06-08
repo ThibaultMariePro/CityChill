@@ -514,6 +514,7 @@ a { color: inherit; }
 .wx-badge[data-level="bad"]  { background: color-mix(in srgb, var(--rose) 20%, var(--surface)); color: var(--rose); }
 
 .card__actions { display: flex; gap: 8px; margin-top: auto; padding-top: 6px; }
+.card__actions--utility { padding-top: 0; flex-wrap: wrap; }
 .btn {
   flex: 1; border: 1px solid var(--border); background: var(--surface-2);
   color: var(--text); border-radius: var(--radius-sm); padding: 9px 10px;
@@ -525,7 +526,8 @@ a { color: inherit; }
 .btn--primary { background: linear-gradient(135deg, var(--coral), var(--coral-deep)); color: #fff; border-color: transparent; }
 .btn--ghost { background: transparent; }
 .btn--in-agenda { background: color-mix(in srgb, var(--teal) 18%, var(--surface)); color: var(--teal); border-color: transparent; }
-.btn--source { flex: 0 0 auto; }
+.btn--compact { flex: 1 1 auto; min-width: 0; padding: 8px 10px; font-size: .78rem; }
+.btn--source { flex: 1 1 auto; }
 
 /* Category gradient backgrounds for card media — derived from the active
    palette variables so editing the palette config recolors everything. */

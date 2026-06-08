@@ -113,6 +113,32 @@
   const wxLevel = (score) => (score >= 70 ? "good" : score >= 45 ? "ok" : "bad");
   const wxLabel = (score) => (score >= 70 ? "Great outdoors" : score >= 45 ? "Bring a layer" : "Better indoors");
 
+  function googleMapsUrl(item) {
+    const hasCoords = item.latitude != null && item.longitude != null;
+    if (hasCoords) {
+      return `https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`;
+    }
+    const parts = [item.title, item.location_name].filter(Boolean);
+    if (!parts.length) return null;
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts.join(", "))}`;
+  }
+
+  async function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  }
+
   /* ── weather ─────────────────────────────────────────────────────────── */
   function renderWeather() {
     const strip = $("#weather-strip");
@@ -252,16 +278,43 @@
       inAgenda(item.id) ? "✓ In agenda" : "+ Add to agenda"
     );
     agendaBtn.addEventListener("click", () => toggleAgenda(item));
+    actions.append(agendaBtn);
 
-    const source = el("a", "btn btn--ghost btn--source");
+    const utilityRow = el("div", "card__actions card__actions--utility");
+    const mapsUrl = googleMapsUrl(item);
+
+    if (mapsUrl) {
+      const mapsLink = el("a", "btn btn--ghost btn--compact");
+      mapsLink.href = mapsUrl;
+      mapsLink.target = "_blank";
+      mapsLink.rel = "noopener";
+      mapsLink.title = "Open in Google Maps";
+      mapsLink.innerHTML = "🌎 Location";
+
+      const copyMap = el("button", "btn btn--ghost btn--compact", "🔗 Link");
+      copyMap.type = "button";
+      copyMap.title = "Copy Google Maps link";
+      copyMap.addEventListener("click", async () => {
+        try {
+          await copyText(mapsUrl);
+          toast("Google Maps link copied");
+        } catch {
+          toast("Could not copy link");
+        }
+      });
+
+      utilityRow.append(mapsLink, copyMap);
+    }
+
+    const source = el("a", "btn btn--ghost btn--compact btn--source");
     source.href    = item.source_url;
     source.target  = "_blank";
     source.rel     = "noopener";
     source.title   = `Source: ${item.source_name}`;
     source.innerHTML = "↗ Source";
+    utilityRow.append(source);
 
-    actions.append(agendaBtn, source);
-    body.appendChild(actions);
+    body.append(actions, utilityRow);
     node.append(media, body);
     return node;
   }
@@ -391,9 +444,32 @@
             <p class="agenda__sub">${sub}</p>
           </div>`;
         const actions = el("div", "agenda__actions");
-        const src     = el("a", "btn btn--ghost");
-        src.href = it.source_url; src.target = "_blank"; src.rel = "noopener"; src.innerHTML = "↗ Source";
-        const rm = el("button", "btn btn--ghost", "✕ Remove");
+        const mapsUrl = googleMapsUrl(it);
+        if (mapsUrl) {
+          const mapsLink = el("a", "btn btn--ghost btn--compact");
+          mapsLink.href = mapsUrl;
+          mapsLink.target = "_blank";
+          mapsLink.rel = "noopener";
+          mapsLink.title = "Open in Google Maps";
+          mapsLink.innerHTML = "🌎 Location";
+          const copyMap = el("button", "btn btn--ghost btn--compact", "🔗 Link");
+          copyMap.type = "button";
+          copyMap.title = "Copy Google Maps link";
+          copyMap.addEventListener("click", async () => {
+            try {
+              await copyText(mapsUrl);
+              toast("Google Maps link copied");
+            } catch {
+              toast("Could not copy link");
+            }
+          });
+          actions.append(mapsLink, copyMap);
+        }
+        const src = el("a", "btn btn--ghost btn--compact");
+        src.href = it.source_url; src.target = "_blank"; src.rel = "noopener"; src.innerHTML = "↗";
+        src.title = "Source";
+        const rm = el("button", "btn btn--ghost btn--compact", "✕");
+        rm.title = "Remove";
         rm.addEventListener("click", () => toggleAgenda(it));
         actions.append(src, rm);
         row.appendChild(actions);
