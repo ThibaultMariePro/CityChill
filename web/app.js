@@ -253,14 +253,16 @@
     const media = el("div", `card__media cat-${esc(item.category)}`);
     const keyword = itemKeyword(item);
     media.innerHTML = `
-      <div class="card__header">
-        <span class="card__emoji" aria-hidden="true">${meta.emoji}</span>
-        <p class="card__keyword">${esc(keyword)}</p>
+      <div class="card__topbar">
+        <div class="card__header">
+          <span class="card__emoji" aria-hidden="true">${meta.emoji}</span>
+          <p class="card__keyword">${esc(keyword)}</p>
+        </div>
+        <button class="card__fav ${isFav(item.id) ? "is-active" : ""}" title="Save to favorites" aria-label="Save to favorites">
+          ${isFav(item.id) ? "❤️" : "🤍"}
+        </button>
       </div>
-      <span class="card__kind">${item.kind === "event" ? "Event" : "Activity"}</span>
-      <button class="card__fav ${isFav(item.id) ? "is-active" : ""}" title="Save to favorites" aria-label="Save to favorites">
-        ${isFav(item.id) ? "❤️" : "🤍"}
-      </button>`;
+      <span class="card__kind">${item.kind === "event" ? "Event" : "Activity"}</span>`;
     media.querySelector(".card__fav").addEventListener("click", () => toggleFav(item));
 
     const body    = el("div", "card__body");
