@@ -254,8 +254,8 @@
     const keyword = itemKeyword(item);
     media.innerHTML = `
       <div class="card__header">
-        <p class="card__keyword">${esc(keyword)}</p>
         <span class="card__emoji" aria-hidden="true">${meta.emoji}</span>
+        <p class="card__keyword">${esc(keyword)}</p>
       </div>
       <span class="card__kind">${item.kind === "event" ? "Event" : "Activity"}</span>
       <button class="card__fav ${isFav(item.id) ? "is-active" : ""}" title="Save to favorites" aria-label="Save to favorites">
@@ -418,15 +418,8 @@
     grid.appendChild(frag);
   }
 
-  /* ── agenda ──────────────────────────────────────────────────────────── */
-  function renderAgenda() {
-    const list  = $("#agenda-list");
-    const empty = $("#agenda-empty");
-    const items = Object.values(agenda());
-    list.innerHTML = "";
-    if (!items.length) { empty.hidden = false; return; }
-    empty.hidden = true;
-
+  /* ── agenda export ───────────────────────────────────────────────────── */
+  function groupAgendaItems(items) {
     const groups = {};
     items.forEach((it) => {
       const key = it.start || "Anytime";
@@ -437,10 +430,183 @@
       if (b === "Anytime") return -1;
       return a.localeCompare(b);
     });
+    return { groups, keys };
+  }
+
+  function agendaDayLabel(key) {
+    return key === "Anytime" ? "Anytime / flexible" : fmtDay(key);
+  }
+
+  function googleCalendarUrl(item) {
+    if (!item.start) return null;
+    const start = item.start.replace(/-/g, "");
+    const endIso = item.end && item.end !== item.start ? item.end : item.start;
+    const endDate = new Date(endIso + "T00:00:00");
+    endDate.setDate(endDate.getDate() + 1);
+    const end = endDate.toISOString().slice(0, 10).replace(/-/g, "");
+
+    const params = new URLSearchParams();
+    params.set("action", "TEMPLATE");
+    params.set("text", item.title);
+    params.set("dates", `${start}/${end}`);
+
+    const details = [
+      itemKeyword(item),
+      item.description,
+      item.source_url ? `Source: ${item.source_url}` : null,
+    ].filter(Boolean).join("\n\n");
+    if (details) params.set("details", details);
+
+    const location = item.location_name || "";
+    if (location) params.set("location", location);
+
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  }
+
+  function icsEscape(value) {
+    return String(value ?? "")
+      .replace(/\\/g, "\\\\")
+      .replace(/;/g, "\\;")
+      .replace(/,/g, "\\,")
+      .replace(/\r?\n/g, "\\n");
+  }
+
+  function icsStamp() {
+    return new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  }
+
+  function icsDayAfter(iso) {
+    const d = new Date(iso + "T00:00:00");
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10).replace(/-/g, "");
+  }
+
+  function buildAgendaPlainText() {
+    const items = Object.values(agenda());
+    const { groups, keys } = groupAgendaItems(items);
+    const lines = [
+      "CityChilly — My Agenda",
+      `Exported ${new Date().toLocaleString()}`,
+      "",
+    ];
+
+    keys.forEach((key) => {
+      lines.push(agendaDayLabel(key));
+      groups[key].forEach((it) => {
+        const meta = catMeta(it.category);
+        const type = itemKeyword(it);
+        lines.push(`• ${it.title} (${type})`);
+        const bits = [it.location_name, meta.label].filter(Boolean);
+        if (bits.length) lines.push(`  ${bits.join(" · ")}`);
+        const maps = googleMapsUrl(it);
+        if (maps) lines.push(`  Maps: ${maps}`);
+        if (it.source_url) lines.push(`  Source: ${it.source_url}`);
+        const gcal = googleCalendarUrl(it);
+        if (gcal) lines.push(`  Google Calendar: ${gcal}`);
+        lines.push("");
+      });
+    });
+
+    return lines.join("\n").trim() + "\n";
+  }
+
+  function buildAgendaICS() {
+    const items = Object.values(agenda());
+    const dated = items.filter((it) => it.start);
+    const anytime = items.filter((it) => !it.start);
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//CityChilly//Agenda//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
+    ];
+
+    dated.forEach((it) => {
+      const start = it.start.replace(/-/g, "");
+      const end = it.end && it.end !== it.start
+        ? icsDayAfter(it.end)
+        : icsDayAfter(it.start);
+      const details = [
+        itemKeyword(it),
+        it.description,
+        googleMapsUrl(it) ? `Maps: ${googleMapsUrl(it)}` : null,
+        it.source_url ? `Source: ${it.source_url}` : null,
+      ].filter(Boolean).join("\\n");
+
+      lines.push(
+        "BEGIN:VEVENT",
+        `UID:${icsEscape(it.id)}@citychilly`,
+        `DTSTAMP:${icsStamp()}`,
+        `DTSTART;VALUE=DATE:${start}`,
+        `DTEND;VALUE=DATE:${end}`,
+        `SUMMARY:${icsEscape(it.title)}`,
+      );
+      if (it.location_name) lines.push(`LOCATION:${icsEscape(it.location_name)}`);
+      if (details) lines.push(`DESCRIPTION:${icsEscape(details)}`);
+      if (it.source_url) lines.push(`URL:${icsEscape(it.source_url)}`);
+      lines.push("END:VEVENT");
+    });
+
+    if (anytime.length) {
+      const note = anytime.map((it) => `• ${it.title}`).join("\n");
+      lines.push(
+        "BEGIN:VTODO",
+        `UID:anytime-${icsStamp()}@citychilly`,
+        `DTSTAMP:${icsStamp()}`,
+        "SUMMARY:Anytime / flexible (CityChilly)",
+        `DESCRIPTION:${icsEscape(`These activities have no fixed date:\n${note}`)}`,
+        "END:VTODO",
+      );
+    }
+
+    lines.push("END:VCALENDAR");
+    return lines.join("\r\n") + "\r\n";
+  }
+
+  function buildAgendaJSON() {
+    return JSON.stringify(
+      {
+        app: "CityChilly",
+        exported_at: new Date().toISOString(),
+        count: Object.keys(agenda()).length,
+        items: Object.values(agenda()),
+      },
+      null,
+      2,
+    );
+  }
+
+  function downloadFile(filename, content, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function updateAgendaExportBar() {
+    const bar = $("#agenda-export");
+    if (bar) bar.hidden = !Object.keys(agenda()).length;
+  }
+
+  /* ── agenda ──────────────────────────────────────────────────────────── */
+  function renderAgenda() {
+    const list  = $("#agenda-list");
+    const empty = $("#agenda-empty");
+    const items = Object.values(agenda());
+    list.innerHTML = "";
+    updateAgendaExportBar();
+    if (!items.length) { empty.hidden = false; return; }
+    empty.hidden = true;
+
+    const { groups, keys } = groupAgendaItems(items);
 
     keys.forEach((key) => {
       const dayBlock = el("div", "agenda__day");
-      const label    = key === "Anytime" ? "Anytime / flexible" : fmtDay(key);
+      const label    = agendaDayLabel(key);
       const head     = el("h3", "agenda__date", `${esc(label)} <span class="pill">${groups[key].length} planned</span>`);
       dayBlock.appendChild(head);
 
@@ -455,6 +621,16 @@
             <p class="agenda__sub">${sub}</p>
           </div>`;
         const actions = el("div", "agenda__actions");
+        const gcalUrl = googleCalendarUrl(it);
+        if (gcalUrl) {
+          const gcal = el("a", "btn btn--ghost btn--compact");
+          gcal.href = gcalUrl;
+          gcal.target = "_blank";
+          gcal.rel = "noopener";
+          gcal.title = "Add to Google Calendar";
+          gcal.innerHTML = "📅 GCal";
+          actions.append(gcal);
+        }
         const mapsUrl = googleMapsUrl(it);
         if (mapsUrl) {
           const mapsLink = el("a", "btn btn--ghost btn--compact");
@@ -964,6 +1140,30 @@
       const current = document.documentElement.getAttribute("data-theme");
       applyTheme(current === "dark" ? "light" : "dark");
     });
+
+    $("#agenda-copy-text").addEventListener("click", async () => {
+      if (!Object.keys(agenda()).length) return;
+      try {
+        await copyText(buildAgendaPlainText());
+        toast("Agenda copied as plain text");
+      } catch {
+        toast("Could not copy agenda");
+      }
+    });
+
+    $("#agenda-download-ics").addEventListener("click", () => {
+      if (!Object.keys(agenda()).length) return;
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadFile(`citychilly-agenda-${stamp}.ics`, buildAgendaICS(), "text/calendar;charset=utf-8");
+      toast("Calendar file downloaded");
+    });
+
+    $("#agenda-download-json").addEventListener("click", () => {
+      if (!Object.keys(agenda()).length) return;
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadFile(`citychilly-agenda-${stamp}.json`, buildAgendaJSON(), "application/json;charset=utf-8");
+      toast("JSON file downloaded");
+    });
   }
 
   /* ── init ────────────────────────────────────────────────────────────── */
@@ -982,6 +1182,7 @@
 
     wire();
     refreshCounts();
+    updateAgendaExportBar();
     loadCategories();
 
     // Restore pinned locations (new format) or fall back to legacy lastCity

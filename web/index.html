@@ -100,6 +100,15 @@
         <h2>My Agenda</h2>
         <p class="panel__hint">Your hand-picked roadmap, sorted by date. Stored on this device.</p>
       </div>
+      <div id="agenda-export" class="agenda-export" hidden>
+        <span class="agenda-export__label">Export</span>
+        <div class="agenda-export__actions">
+          <button type="button" class="btn btn--ghost btn--compact" id="agenda-copy-text" title="Copy agenda as plain text">📋 Copy text</button>
+          <button type="button" class="btn btn--ghost btn--compact" id="agenda-download-ics" title="Download iCalendar file">📅 Calendar (.ics)</button>
+          <button type="button" class="btn btn--ghost btn--compact" id="agenda-download-json" title="Download JSON backup">💾 JSON</button>
+        </div>
+        <p class="agenda-export__hint">Dated items also have a <strong>📅 GCal</strong> button to add them to Google Calendar.</p>
+      </div>
       <div id="agenda-list" class="agenda"></div>
       <div class="empty" id="agenda-empty">
         <div class="empty__emoji">🗓️</div>
