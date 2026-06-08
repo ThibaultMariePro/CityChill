@@ -11,7 +11,8 @@
     pins:      "citychilly:pins",       // new multi-pin storage
     favorites: "citychilly:favorites",
     agenda:    "citychilly:agenda",
-    params:    "citychilly:params",
+    params:           "citychilly:params",
+    dismissedNotices: "citychilly:dismissedNotices",
   };
 
   /* ── state ───────────────────────────────────────────────────────────── */
@@ -206,25 +207,90 @@
     }
   }
 
-  /* ── notices ─────────────────────────────────────────────────────────── */
+  /* ── warnings / notices ──────────────────────────────────────────────── */
+  function noticeId(text) {
+    let hash = 0;
+    for (let i = 0; i < text.length; i += 1) {
+      hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+    }
+    return `n:${(hash >>> 0).toString(36)}`;
+  }
+
+  function readDismissedNotices() {
+    try {
+      const raw = localStorage.getItem(LS.dismissedNotices);
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw);
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function dismissNotice(text) {
+    const dismissed = readDismissedNotices();
+    dismissed.add(noticeId(text));
+    localStorage.setItem(LS.dismissedNotices, JSON.stringify([...dismissed]));
+    renderWarnings();
+  }
+
   function allNotices() {
+    const dismissed = readDismissedNotices();
     const seen = new Set();
     const out  = [];
     for (const pin of state.pins) {
       for (const n of state.pinData[pin.id]?.notices ?? []) {
-        if (!seen.has(n)) { seen.add(n); out.push(n); }
+        if (seen.has(n) || dismissed.has(noticeId(n))) continue;
+        seen.add(n);
+        out.push(n);
       }
     }
     return out;
   }
 
-  function renderNotices() {
-    const box = $("#notices");
-    box.innerHTML = "";
+  function refreshWarningsTab() {
+    const count = allNotices().length;
+    const badge = $("#warnings-count");
+    const tab = document.querySelector('.tab[data-tab="warnings"]');
+    if (badge) {
+      badge.textContent = String(count);
+      badge.hidden = count === 0;
+    }
+    if (tab) tab.hidden = count === 0;
+    if (count === 0 && state.tab === "warnings") setTab("discover");
+  }
+
+  function renderWarnings() {
+    const list  = $("#warnings-list");
+    const empty = $("#warnings-empty");
+    if (!list) return;
+
     const notices = allNotices();
-    if (!notices.length) { box.hidden = true; return; }
-    box.hidden = false;
-    notices.forEach((n) => box.appendChild(el("div", "notice", `💡 ${esc(n)}`)));
+    list.innerHTML = "";
+
+    if (!notices.length) {
+      if (empty) empty.hidden = false;
+      refreshWarningsTab();
+      return;
+    }
+    if (empty) empty.hidden = true;
+
+    notices.forEach((n) => {
+      const row = el("button", "warning-item");
+      row.type = "button";
+      row.title = "Dismiss warning";
+      row.innerHTML = `
+        <span class="warning-item__icon" aria-hidden="true">⚠️</span>
+        <span class="warning-item__text">${esc(n)}</span>
+        <span class="warning-item__close" aria-hidden="true">×</span>`;
+      row.addEventListener("click", () => {
+        dismissNotice(n);
+        toast("Warning dismissed");
+      });
+      list.appendChild(row);
+    });
+
+    refreshWarningsTab();
   }
 
   /* ── favorites & agenda ──────────────────────────────────────────────── */
@@ -360,8 +426,7 @@
     placeSub.textContent = "Search a city or postal code above";
     placeSub.classList.remove("hero__subtitle--codes");
     $("#weather-strip").innerHTML = "";
-    $("#notices").innerHTML = "";
-    $("#notices").hidden = true;
+    renderWarnings();
     $("#discover-grid").innerHTML = "";
     const empty = $("#discover-empty");
     empty.hidden = false;
@@ -771,6 +836,7 @@
 
   function renderActivePanel() {
     if (state.tab === "discover") renderDiscover();
+    else if (state.tab === "warnings") renderWarnings();
     else if (state.tab === "favorites") renderFavorites();
     else if (state.tab === "agenda") renderAgenda();
     else if (state.tab === "parameters") renderParameters();
@@ -1144,7 +1210,7 @@
     // Drop cached results immediately so cards from a previous selection never linger.
     state.pinData = {};
     renderWeather();
-    renderNotices();
+    renderWarnings();
     renderActivePanel();
 
     const loadingTimer = setTimeout(() => showLoading(true, "Updating results…"), 220);
@@ -1198,7 +1264,7 @@
       renderPinnedChips();
       renderHero();
       renderWeather();
-      renderNotices();
+      renderWarnings();
       renderActivePanel();
     } finally {
       if (gen === loadGeneration) {
@@ -1237,7 +1303,7 @@
       renderPinnedChips();
       renderHero();
       renderWeather();
-      renderNotices();
+      renderWarnings();
       renderActivePanel();
     } catch (e) {
       toast(e.message || "Something went wrong");

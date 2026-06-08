@@ -64,13 +64,12 @@
       <div class="hero__weather" id="weather-strip" aria-label="Weather forecast"></div>
     </section>
 
-    <div id="notices" class="notices" hidden></div>
-
     <nav class="tabs" role="tablist">
       <button class="tab is-active" data-tab="discover" role="tab">🧭 Discover</button>
       <button class="tab" data-tab="agenda" role="tab">🗓️ My Agenda <span class="tab__count" id="agenda-count">0</span></button>
       <button class="tab" data-tab="favorites" role="tab">❤️ Favorites <span class="tab__count" id="fav-count">0</span></button>
       <button class="tab" data-tab="parameters" role="tab">⚙️ Parameters</button>
+      <button class="tab" data-tab="warnings" role="tab" hidden>⚠️ Warnings <span class="tab__count" id="warnings-count">0</span></button>
     </nav>
 
     <!-- Discover -->
@@ -145,6 +144,20 @@
         <div class="empty__emoji">❤️</div>
         <h3>No favorites yet</h3>
         <p>Tap the heart on any card to keep it here.</p>
+      </div>
+    </section>
+
+    <!-- Warnings (last tab) -->
+    <section class="panel" id="panel-warnings" role="tabpanel">
+      <div class="panel__head">
+        <h2>Warnings</h2>
+        <p class="panel__hint">Service notices and data limitations for your current selection. Tap a warning to dismiss it.</p>
+      </div>
+      <div id="warnings-list" class="warnings-list"></div>
+      <div class="empty" id="warnings-empty" hidden>
+        <div class="empty__emoji">✅</div>
+        <h3>No warnings</h3>
+        <p>Everything looks good for your current selection.</p>
       </div>
     </section>
   </main>
