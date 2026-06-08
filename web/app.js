@@ -27,9 +27,10 @@
   };
 
   // Autocomplete state
-  let acTimer      = null;
-  let acFocused    = -1;
-  let acController = null;
+  let acTimer        = null;
+  let acFocused      = -1;
+  let acController   = null;
+  let acSuggestions  = [];
   let loadGeneration = 0;
 
   /* ── tiny helpers ────────────────────────────────────────────────────── */
@@ -58,6 +59,11 @@
 
   function isPostcodePinned(code) {
     return state.pins.some((p) => p.id === makePostcodePinId(code));
+  }
+
+  function isAreaFullyPinned(suggestion) {
+    const codes = suggestion?.postcodes || [];
+    return codes.length > 0 && codes.every((code) => isPostcodePinned(code));
   }
 
   function readPins() {
@@ -835,36 +841,90 @@
     reloadSelection();
   }
 
-  async function addPinFromPostcode(code, parent) {
+  async function resolvePostcodeSuggestion(code, parent) {
     const clean = String(code).trim();
-    if (!clean) return;
+    if (!clean) return null;
+    const res = await fetch(`${API}/api/geocode?q=${encodeURIComponent(clean)}`);
+    if (!res.ok) throw new Error("Lookup failed");
+    const data = await res.json();
+    const suggestions = data.suggestions || [];
+    const match = suggestions.find((s) => s.kind === "postcode" || s.postcode === clean) || suggestions[0];
+    if (!match) return null;
+    const pin = suggestionToPin(match);
+    if (parent?.name && pin.postcode) {
+      pin.display = `${pin.postcode} · ${parent.name}`;
+    }
+    return pin;
+  }
+
+  async function addPinFromPostcode(code, parent, { reload = true } = {}) {
+    const clean = String(code).trim();
+    if (!clean) return false;
     if (isPostcodePinned(clean)) {
       toast(`${clean} is already pinned`);
-      return;
+      return false;
     }
     try {
-      const res = await fetch(`${API}/api/geocode?q=${encodeURIComponent(clean)}`);
-      if (!res.ok) throw new Error("Lookup failed");
-      const data = await res.json();
-      const suggestions = data.suggestions || [];
-      const match = suggestions.find((s) => s.kind === "postcode" || s.postcode === clean) || suggestions[0];
-      if (!match) {
+      const pin = await resolvePostcodeSuggestion(clean, parent);
+      if (!pin) {
         toast(`Could not find postal code ${clean}`);
-        return;
-      }
-      const pin = suggestionToPin(match);
-      if (parent?.name && pin.postcode) {
-        pin.display = `${pin.postcode} · ${parent.name}`;
+        return false;
       }
       state.pins.push(pin);
-      setTab("discover");
-      await reloadSelection();
-      toast(`Pinned ${clean}`);
-      // Keep dropdown open so user can pin more codes from the same city.
-      const query = $("#city-input").value.trim();
-      if (query.length >= 2) fetchSuggestions(query);
+      if (reload) {
+        setTab("discover");
+        await reloadSelection();
+        toast(`Pinned ${clean}`);
+        const query = $("#city-input").value.trim();
+        if (query.length >= 2) fetchSuggestions(query);
+      }
+      return true;
     } catch {
       toast(`Could not pin postal code ${clean}`);
+      return false;
+    }
+  }
+
+  async function addAllPostcodesFromArea(area) {
+    const codes = (area.postcodes || []).filter((code) => !isPostcodePinned(code));
+    if (!codes.length) {
+      toast(`${area.name} is already fully pinned`);
+      closeDropdown();
+      return;
+    }
+
+    closeDropdown();
+    $("#city-input").value = "";
+    setTab("discover");
+    showLoading(true, `Pinning ${area.name}…`);
+
+    try {
+      const resolved = await Promise.all(
+        codes.map(async (code) => {
+          try {
+            return await resolvePostcodeSuggestion(code, area);
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      let added = 0;
+      for (const pin of resolved) {
+        if (!pin || state.pins.some((p) => p.id === pin.id)) continue;
+        state.pins.push(pin);
+        added += 1;
+      }
+
+      if (!added) {
+        toast(`Could not pin postal codes for ${area.name}`);
+        return;
+      }
+
+      await reloadSelection();
+      toast(`Pinned ${added} postal code${added === 1 ? "" : "s"} for ${area.name}`);
+    } finally {
+      showLoading(false);
     }
   }
 
@@ -895,6 +955,7 @@
 
   function renderDropdown(suggestions) {
     const list = $("#autocomplete-list");
+    acSuggestions = suggestions;
     if (!suggestions.length) { closeDropdown(); return; }
 
     list.innerHTML = "";
@@ -908,18 +969,32 @@
 
       if (isArea) {
         const codes = s.postcodes || [];
+        const fullyPinned = isAreaFullyPinned(s);
         const codeBtns = codes.map((code) => {
           const pinned = isPostcodePinned(code);
           return `<button type="button" class="ac-item__code-btn${pinned ? " is-pinned" : ""}" data-code="${esc(code)}" ${pinned ? "disabled" : ""}>${pinned ? "✓ " : "+ "}${esc(code)}</button>`;
         }).join("");
 
         li.innerHTML = `
-          <div class="ac-item__info">
-            <div class="ac-item__name">${esc(s.name)}</div>
-            <div class="ac-item__meta">${esc([s.admin1, s.country].filter(Boolean).join(", "))}</div>
-            <div class="ac-item__hint">Pin individual postal codes — not the whole agglomeration</div>
-            <div class="ac-item__codes">${codeBtns}</div>
-          </div>`;
+          <div class="ac-item__head">
+            <div class="ac-item__info">
+              <div class="ac-item__name">${esc(s.name)}</div>
+              <div class="ac-item__meta">${esc([s.admin1, s.country].filter(Boolean).join(", "))}</div>
+            </div>
+            <button type="button" class="ac-item__pin-all" ${fullyPinned ? "disabled" : ""}>
+              ${fullyPinned ? "✓ All pinned" : `+ Pin all (${codes.length})`}
+            </button>
+          </div>
+          <div class="ac-item__hint">Press Enter to pin the whole agglomeration, or pick individual codes below</div>
+          <div class="ac-item__codes">${codeBtns}</div>`;
+
+        const pinAll = li.querySelector(".ac-item__pin-all:not(:disabled)");
+        if (pinAll) {
+          pinAll.addEventListener("click", (e) => {
+            e.stopPropagation();
+            addAllPostcodesFromArea(s);
+          });
+        }
 
         li.querySelectorAll(".ac-item__code-btn:not(:disabled)").forEach((btn) => {
           btn.addEventListener("click", (e) => {
@@ -957,6 +1032,7 @@
   function closeDropdown() {
     const list = $("#autocomplete-list");
     if (list) { list.hidden = true; }
+    acSuggestions = [];
     acFocused = -1;
     const input = $("#city-input");
     if (input) {
@@ -966,7 +1042,11 @@
   }
 
   function moveFocus(dir) {
-    const items = $$("#autocomplete-list .ac-item:not(.is-pinned) .ac-item__pin, #autocomplete-list .ac-item__code-btn:not(:disabled)");
+    const items = $$(
+      "#autocomplete-list .ac-item:not(.is-pinned) .ac-item__pin:not(:disabled), " +
+      "#autocomplete-list .ac-item__pin-all:not(:disabled), " +
+      "#autocomplete-list .ac-item__code-btn:not(:disabled)"
+    );
     if (!items.length) return;
     $$("#autocomplete-list .ac-item").forEach((i) => i.classList.remove("is-focused"));
     acFocused = Math.max(-1, Math.min(items.length - 1, acFocused + dir));
@@ -1159,8 +1239,14 @@
       const query = $("#city-input").value.trim();
       if (!query) return;
 
+      const listOpen = !$("#autocomplete-list").hidden;
+
       // Keyboard-focused postcode chip or pin button
-      const focusedBtn = $("#autocomplete-list .ac-item.is-focused .ac-item__code-btn:not(:disabled), #autocomplete-list .ac-item.is-focused .ac-item__pin:not(:disabled)");
+      const focusedBtn = $(
+        "#autocomplete-list .ac-item.is-focused .ac-item__pin-all:not(:disabled), " +
+        "#autocomplete-list .ac-item.is-focused .ac-item__code-btn:not(:disabled), " +
+        "#autocomplete-list .ac-item.is-focused .ac-item__pin:not(:disabled)"
+      );
       if (focusedBtn) { focusedBtn.click(); return; }
 
       // Direct postal-code entry replaces the current selection
@@ -1177,16 +1263,18 @@
         return;
       }
 
-      // Fall back to the first pinable suggestion if dropdown is visible
-      const firstPin = $("#autocomplete-list .ac-item:not(.ac-item--area):not(.is-pinned) .ac-item__pin:not(:disabled)");
-      if (firstPin && !$("#autocomplete-list").hidden) { firstPin.click(); return; }
-
-      // City search with multiple postcodes — prompt user to pick codes
-      const areaRow = $("#autocomplete-list .ac-item--area");
-      if (areaRow && !$("#autocomplete-list").hidden) {
-        toast("Select the postal codes you want to include");
+      // City with agglomeration — pin all postal codes by default
+      const areaSuggestion = acSuggestions.find(
+        (s) => s.kind === "area" && (s.postcodes || []).length > 1
+      );
+      if (areaSuggestion && listOpen) {
+        await addAllPostcodesFromArea(areaSuggestion);
         return;
       }
+
+      // Fall back to the first pinable suggestion if dropdown is visible
+      const firstPin = $("#autocomplete-list .ac-item:not(.ac-item--area):not(.is-pinned) .ac-item__pin:not(:disabled)");
+      if (firstPin && listOpen) { firstPin.click(); return; }
 
       setTab("discover");
       closeDropdown();
@@ -1202,8 +1290,16 @@
       acTimer = setTimeout(() => fetchSuggestions(query), 300);
     });
 
-    // Keyboard navigation in dropdown
+    // Keyboard navigation in dropdown; Backspace on empty input removes last pin
     input.addEventListener("keydown", (e) => {
+      if (e.key === "Backspace" && !input.value && state.pins.length) {
+        e.preventDefault();
+        const last = state.pins[state.pins.length - 1];
+        removePin(last.id);
+        toast(`Removed ${pinLabel(last)}`);
+        return;
+      }
+
       const list = $("#autocomplete-list");
       if (list.hidden) return;
       if      (e.key === "ArrowDown") { e.preventDefault(); moveFocus(+1); }
