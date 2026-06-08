@@ -1,0 +1,764 @@
+{
+  "by_title": {
+    "Louvre Museum – Masterpieces": {
+      "title": "Musée du Louvre – Chefs-d'œuvre",
+      "description": "Collections mondialement célèbres, de l'Antiquité au XIXe siècle, dans l'ancien palais."
+    },
+    "Eiffel Tower – Summit Views": {
+      "title": "Tour Eiffel – Vue du sommet",
+      "description": "Tour emblématique en fer avec des terrasses panoramiques sur la Seine et la ville."
+    },
+    "Musée d'Orsay – Impressionists": {
+      "title": "Musée d'Orsay – Impressionnistes",
+      "description": "Monet, Van Gogh et bien d'autres dans une ancienne gare somptueuse."
+    },
+    "Centre Pompidou – Modern Art": {
+      "title": "Centre Pompidou – Art moderne",
+      "description": "Art contemporain, design et vue depuis le toit à Beaubourg."
+    },
+    "Parc des Buttes-Chaumont – Hilltop Walk": {
+      "title": "Parc des Buttes-Chaumont – Promenade en hauteur",
+      "description": "Falaises spectaculaires, lac et temple-belvédère dans un parc romantique du XIXe siècle."
+    },
+    "Marché des Enfants Rouges – Food Hall": {
+      "title": "Marché des Enfants Rouges – Halle gourmande",
+      "description": "Le plus ancien marché couvert de Paris, avec street food du monde entier et produits frais."
+    },
+    "Concert at Olympia": {
+      "title": "Concert à l'Olympia",
+      "description": "Salle de concert parisienne légendaire accueillant des artistes en tournée toute l'année."
+    },
+    "Cinéma du Panthéon – Arthouse Night": {
+      "title": "Cinéma du Panthéon – Soirée art et essai",
+      "description": "Cinéma du Quartier latin prisé pour les films en VO et les séances de festival."
+    },
+    "Seine Riverside Stroll – Berges": {
+      "title": "Promenade le long de la Seine – Berges",
+      "description": "Marche, pique-nique ou vélo le long des berges réaménagées de la Seine."
+    },
+    "Notre-Dame Quarter – Historic Walk": {
+      "title": "Quartier Notre-Dame – Balade historique",
+      "description": "Explorez l'île, les ponts et le cœur médiéval de Paris."
+    },
+    "Parc de la Tête d'Or – Lakes & Zoo": {
+      "title": "Parc de la Tête d'Or – Lacs et zoo",
+      "description": "Vaste parc urbain avec lac, jardin botanique et zoo gratuit."
+    },
+    "Vieux Lyon – Renaissance Traboules": {
+      "title": "Vieux Lyon – Traboules de la Renaissance",
+      "description": "Passages secrets, cours intérieures et bouchons lyonnais dans la vieille ville."
+    },
+    "Musée des Confluences": {
+      "title": "Musée des Confluences",
+      "description": "Sciences et anthropologie dans un bâtiment spectaculaire de verre et d'acier."
+    },
+    "Basilique de Fourvière": {
+      "title": "Basilique de Fourvière",
+      "description": "Basilique perchée sur la colline avec vue panoramique sur Lyon et les Alpes."
+    },
+    "Les Halles de Lyon Paul Bocuse": {
+      "title": "Les Halles de Lyon Paul Bocuse",
+      "description": "Halle gastronomique regroupant les meilleurs producteurs de la région."
+    },
+    "Opéra de Lyon – Season Programme": {
+      "title": "Opéra de Lyon – Saison",
+      "description": "Opéra rénové proposant danse, concerts et théâtre."
+    },
+    "Amphithéâtre des Trois Gaules": {
+      "title": "Amphithéâtre des Trois Gaules",
+      "description": "Ruines d'un amphithéâtre romain sur les pentes de Fourvière."
+    },
+    "Fête des Lumières – Light Trail": {
+      "title": "Fête des Lumières – Parcours lumineux",
+      "description": "Installations et projections lumineuses dans toute la ville (tradition de début décembre)."
+    },
+    "Confluence Shopping & Rooftop": {
+      "title": "Confluence – Shopping et toit-terrasse",
+      "description": "Centre commercial au bord de l'eau, restauration et architecture au confluent Rhône-Saône."
+    },
+    "MuCEM – Mediterranean Museum": {
+      "title": "MuCEM – Musée de la Méditerranée",
+      "description": "Musée remarquable en bord de mer explorant les civilisations méditerranéennes."
+    },
+    "Vieux-Port – Harbour Walk": {
+      "title": "Vieux-Port – Promenade portuaire",
+      "description": "Marché aux poissons le matin, ferries et cafés autour du port historique."
+    },
+    "Basilique Notre-Dame de la Garde": {
+      "title": "Basilique Notre-Dame de la Garde",
+      "description": "Basilique panoramique dominant toute la ville et les îles."
+    },
+    "Calanques National Park – Coastal Hike": {
+      "title": "Parc national des Calanques – Randonnée côtière",
+      "description": "Fjords turquoise et sentiers de falaises entre Marseille et Cassis."
+    },
+    "Opéra de Marseille – Evening Show": {
+      "title": "Opéra de Marseille – Spectacle du soir",
+      "description": "Opéra, ballet et concerts dans le grand théâtre municipal."
+    },
+    "Château d'If – Island Visit": {
+      "title": "Château d'If – Visite de l'île",
+      "description": "Forteresse insulaire rendue célèbre par Le Comte de Monte-Cristo."
+    },
+    "Palais Longchamp – Gardens & Museum": {
+      "title": "Palais Longchamp – Jardins et musée",
+      "description": "Fontaine monumentale, musée des beaux-arts et parc ombragé."
+    },
+    "Marché aux Poissons – Morning Market": {
+      "title": "Marché aux Poissons – Marché du matin",
+      "description": "Poisson frais et spécialités locales au marché du Vieux-Port."
+    },
+    "Le Cours Julien – Street Art & Cafés": {
+      "title": "Le Cours Julien – Street art et cafés",
+      "description": "Quartier bohème de fresques murales, bars et boutiques indépendantes."
+    },
+    "Cité de l'Espace – Space Park": {
+      "title": "Cité de l'Espace – Parc spatial",
+      "description": "Fusée Ariane grandeur nature, planétarium et expositions interactives sur l'espace."
+    },
+    "Place du Capitole – Heart of the City": {
+      "title": "Place du Capitole – Cœur de la ville",
+      "description": "Place en briques roses, hôtel de ville et cafés animés dans la Ville rose."
+    },
+    "Basilique Saint-Sernin – Romanesque Gem": {
+      "title": "Basilique Saint-Sernin – Joyau roman",
+      "description": "Église de pèlerinage classée UNESCO, plus grand édifice roman d'Europe."
+    },
+    "Canal du Midi – Waterside Bike Ride": {
+      "title": "Canal du Midi – Balade à vélo au bord de l'eau",
+      "description": "Chemins de halage UNESCO, parfaits pour le vélo et les pique-niques."
+    },
+    "Musée des Abattoirs – Modern Art": {
+      "title": "Musée des Abattoirs – Art moderne",
+      "description": "Art contemporain et moderne dans un ancien abattoir reconverti."
+    },
+    "Théâtre du Capitole – Opera & Ballet": {
+      "title": "Théâtre du Capitole – Opéra et ballet",
+      "description": "Opéra national de la région Occitanie."
+    },
+    "Jardin des Plantes – Botanical Stroll": {
+      "title": "Jardin des Plantes – Promenade botanique",
+      "description": "Jardin botanique historique et serres à proximité de l'université."
+    },
+    "Saint-Cyprien Market – Sunday Morning": {
+      "title": "Marché Saint-Cyprien – Dimanche matin",
+      "description": "Marché de quartier animé sur la rive gauche de la Garonne."
+    },
+    "Aeroscopia – Aviation Museum": {
+      "title": "Aeroscopia – Musée de l'aviation",
+      "description": "Patrimoine Airbus, Concorde et expositions interactives sur l'aviation."
+    },
+    "Promenade des Anglais – Seaside Walk": {
+      "title": "Promenade des Anglais – Balade en bord de mer",
+      "description": "Boulevard emblématique en front de mer, du port à l'aéroport."
+    },
+    "Vieille Ville – Old Town Labyrinth": {
+      "title": "Vieille Ville – Labyrinthe du vieux Nice",
+      "description": "Ruelles colorées, églises baroques et stands de socca."
+    },
+    "Colline du Château – Panorama": {
+      "title": "Colline du Château – Panorama",
+      "description": "Parc en hauteur avec cascade, ruines et vue sur la baie."
+    },
+    "Musée Matisse": {
+      "title": "Musée Matisse",
+      "description": "L'œuvre du peintre dans une villa génoise au milieu d'oliviers."
+    },
+    "Cours Saleya Market – Flowers & Produce": {
+      "title": "Marché du Cours Saleya – Fleurs et produits",
+      "description": "Place du marché quotidien pour fleurs, fruits et spécialités niçoises."
+    },
+    "MAMAC – Modern Art on the Hill": {
+      "title": "MAMAC – Art moderne sur la colline",
+      "description": "Art moderne et contemporain avec terrasse sur le toit dominant la ville."
+    },
+    "Opéra de Nice – Evening Performance": {
+      "title": "Opéra de Nice – Spectacle du soir",
+      "description": "Opéra Belle Époque au cœur de la vieille ville."
+    },
+    "Parc Phoenix – Tropical Greenhouse": {
+      "title": "Parc Phoenix – Serre tropicale",
+      "description": "L'une des plus grandes serres d'Europe et zoo au bord du lac."
+    },
+    "Cinéma Variétés – Art House": {
+      "title": "Cinéma Variétés – Art et essai",
+      "description": "Cinéma indépendant près du port pour festivals et séances en VO."
+    },
+    "Les Machines de l'Île – The Great Elephant": {
+      "title": "Les Machines de l'Île – Le Grand Éléphant",
+      "description": "Montez sur le grand éléphant mécanique et explorez le Carrousel des Mondes Marins sur les anciens chantiers navals."
+    },
+    "Le Voyage à Nantes – Art Trail": {
+      "title": "Le Voyage à Nantes – Parcours artistique",
+      "description": "Suivez la ligne verte peinte à travers la ville pour découvrir des œuvres en plein air et des installations surprenantes."
+    },
+    "Château des ducs de Bretagne – Guided Visit": {
+      "title": "Château des ducs de Bretagne – Visite guidée",
+      "description": "Parcourez les remparts et plongez dans l'histoire de Nantes dans ce château ducal magnifiquement restauré."
+    },
+    "Concert Night at Stereolux": {
+      "title": "Soirée concert au Stereolux",
+      "description": "Concerts live indie, électro et expérimentaux dans l'un des principaux lieux de musique et arts numériques de la ville."
+    },
+    "Exhibition at Le Lieu Unique": {
+      "title": "Exposition au Lieu Unique",
+      "description": "Art contemporain, performances et bar célèbre dans l'ancienne usine de biscuits LU."
+    },
+    "Jardin des Plantes – Open-air Botanical Stroll": {
+      "title": "Jardin des Plantes – Promenade botanique en plein air",
+      "description": "Sept hectares de serres, sculptures et floraisons saisonnières juste à côté de la gare."
+    },
+    "Île de Versailles – Japanese Garden Walk": {
+      "title": "Île de Versailles – Promenade au jardin japonais",
+      "description": "Jardin paisible d'inspiration japonaise sur l'île de l'Erdre, parfait pour un après-midi tranquille."
+    },
+    "Musée d'arts de Nantes – Collections": {
+      "title": "Musée d'arts de Nantes – Collections",
+      "description": "Des maîtres classiques à l'art contemporain dans un musée lumineux récemment rénové."
+    },
+    "Live show at Le Grand T": {
+      "title": "Spectacle au Grand T",
+      "description": "Théâtre, danse et cirque sur l'une des principales scènes de la région."
+    },
+    "Marché de Talensac – Saturday Market": {
+      "title": "Marché de Talensac – Marché du samedi",
+      "description": "Le marché couvert et en plein air le plus célèbre de Nantes : huîtres, fromages, fleurs et produits locaux."
+    },
+    "Concert at Zénith Nantes Métropole": {
+      "title": "Concert au Zénith Nantes Métropole",
+      "description": "Grands artistes en tournée et spectacles majeurs dans la plus grande salle de concert de l'agglomération."
+    },
+    "Hangar à Bananes – Riverside Nightlife": {
+      "title": "Hangar à Bananes – Vie nocturne en bord de Loire",
+      "description": "Bars, clubs et l'installation lumineuse de Buren le long de la Loire sur l'île de Nantes."
+    },
+    "Loire à Vélo – Riverside Cycling": {
+      "title": "Loire à Vélo – Cyclisme en bord de Loire",
+      "description": "Prenez le vélo et suivez l'itinéraire balisé Loire à Vélo le long du fleuve hors de la ville."
+    },
+    "Planète Sauvage – Safari Park": {
+      "title": "Planète Sauvage – Parc safari",
+      "description": "Safari en voiture et sentiers animaliers au sud de Nantes – une belle sortie en famille."
+    },
+    "Trempo – Emerging Music Showcase": {
+      "title": "Trempo – Scène musiques émergentes",
+      "description": "Découvrez les prochains groupes et artistes locaux dans cet incubateur musical sur l'île de Nantes."
+    },
+    "Le Lieu Unique – Sunday Brunch & Books": {
+      "title": "Le Lieu Unique – Brunch du dimanche et librairie",
+      "description": "Brunch détendu, hammam et librairie dans l'emblématique tour LU."
+    },
+    "La Cité des Congrès – Festival Weekend": {
+      "title": "La Cité des Congrès – Week-end festival",
+      "description": "Salons, foires et festivals tout au long de la saison dans le principal centre de congrès de la ville."
+    },
+    "Parc de la Gaudinière – Outdoor Picnic": {
+      "title": "Parc de la Gaudinière – Pique-nique en plein air",
+      "description": "Vallée boisée avec ruisseaux et prairies au nord de Nantes – idéal pour un pique-nique ensoleillé."
+    },
+    "Cinematic Night at Katorza": {
+      "title": "Soirée cinéma au Katorza",
+      "description": "Films d'auteur et en version originale dans un cinéma indépendant bien-aimé du centre-ville."
+    },
+    "Street Food Market on Île de Nantes": {
+      "title": "Marché street food sur l'île de Nantes",
+      "description": "Food trucks, bière artisanale locale et musique live au bord de la Loire sur l'île de Nantes créative."
+    },
+    "Place de la Comédie – Central Square": {
+      "title": "Place de la Comédie – Place centrale",
+      "description": "Vaste esplanade avec fontaine, trams et Opéra Comédie."
+    },
+    "Musée Fabre – Fine Arts": {
+      "title": "Musée Fabre – Beaux-arts",
+      "description": "Grande collection des maîtres anciens à l'art contemporain."
+    },
+    "Jardin des Plantes – Historic Garden": {
+      "title": "Jardin des Plantes – Jardin historique",
+      "description": "Le plus ancien jardin botanique de France, fondé en 1593."
+    },
+    "Zoo de Lunaret – Family Day": {
+      "title": "Zoo de Lunaret – Journée en famille",
+      "description": "Grand zoo boisé avec savane africaine et serre amazonienne."
+    },
+    "Antigone District – Architecture Walk": {
+      "title": "Quartier Antigone – Balade architecturale",
+      "description": "Quartier néoclassique en bord de rivière conçu par Ricardo Bofill."
+    },
+    "Opéra Comédie – Season Shows": {
+      "title": "Opéra Comédie – Saison",
+      "description": "Opéra, danse et concerts sur la place principale."
+    },
+    "Pic Saint-Loup – Vineyard Excursion": {
+      "title": "Pic Saint-Loup – Excursion vignoble",
+      "description": "Excursion d'une journée dans le célèbre vignoble languedocien au nord de la ville."
+    },
+    "Marché des Beaux-Arts – Local Market": {
+      "title": "Marché des Beaux-Arts – Marché local",
+      "description": "Marché couvert quotidien pour produits régionaux et fruits de mer."
+    },
+    "Planet Ocean Montpellier": {
+      "title": "Planet Ocean Montpellier",
+      "description": "Aquarium et centre de découverte océanique sur le campus Odysseum."
+    },
+    "Cathédrale Notre-Dame – Gothic Masterpiece": {
+      "title": "Cathédrale Notre-Dame – Chef-d'œuvre gothique",
+      "description": "Horloge astronomique, rosace et flèche dominant la vieille ville."
+    },
+    "Petite France – Canals & Half-Timber": {
+      "title": "Petite France – Canaux et colombages",
+      "description": "Quartier pittoresque de canaux, moulins et balcons fleuris."
+    },
+    "Parc de l'Orangerie – Lake & Storks": {
+      "title": "Parc de l'Orangerie – Lac et cigognes",
+      "description": "Le plus ancien parc de la ville avec lac, zoo et centre de réintroduction des cigognes."
+    },
+    "Musée d'Art Moderne et Contemporain": {
+      "title": "Musée d'art moderne et contemporain",
+      "description": "L'une des plus importantes collections d'art moderne et contemporain de France."
+    },
+    "European Quarter – Institutions Tour": {
+      "title": "Quartier européen – Visite des institutions",
+      "description": "Parlement, Conseil de l'Europe et architecture contemporaine."
+    },
+    "Opéra du Rhin – Ballet & Opera": {
+      "title": "Opéra du Rhin – Ballet et opéra",
+      "description": "Opéra, ballet et orchestre à Strasbourg, Mulhouse et Colmar."
+    },
+    "Marché de Noël – Seasonal Market": {
+      "title": "Marché de Noël – Marché saisonnier",
+      "description": "L'un des plus anciens et plus grands marchés de Noël d'Europe (fin nov.–déc.)."
+    },
+    "Boat Tour on the Ill": {
+      "title": "Croisière sur l'Ill",
+      "description": "Croisière guidée sur le canal à travers le site UNESCO de la Grande Île."
+    },
+    "Palais Rohan – Museum Trio": {
+      "title": "Palais Rohan – Trio de musées",
+      "description": "Archéologie, beaux-arts et arts décoratifs dans un palais épiscopal."
+    },
+    "Place de la Bourse – Miroir d'Eau": {
+      "title": "Place de la Bourse – Miroir d'eau",
+      "description": "Bassin miroir et architecture du XVIIIe siècle en bord de Garonne."
+    },
+    "Cité du Vin – Wine Experience": {
+      "title": "Cité du Vin – Expérience vin",
+      "description": "Musée interactif du vin avec dégustation et belvédère panoramique."
+    },
+    "Grand Théâtre – Opera Night": {
+      "title": "Grand Théâtre – Soirée opéra",
+      "description": "Opéra néoclassique et siège de l'Orchestre national de Bordeaux."
+    },
+    "Marché des Capucins – Food Market": {
+      "title": "Marché des Capucins – Marché alimentaire",
+      "description": "« Le ventre de Bordeaux » — huîtres, fromages et spécialités locales."
+    },
+    "Darwin Écosystème – Creative Hub": {
+      "title": "Darwin Écosystème – Pôle créatif",
+      "description": "Skatepark, street art, marché bio et vie nocturne sur la rive droite."
+    },
+    "Musée d'Aquitaine – Regional History": {
+      "title": "Musée d'Aquitaine – Histoire régionale",
+      "description": "De Lascaux préhistorique au commerce du vin et à Bordeaux maritime."
+    },
+    "Jardin Public – Central Park": {
+      "title": "Jardin Public – Parc central",
+      "description": "Élégant parc du XVIIIe siècle avec lac et muséum d'histoire naturelle."
+    },
+    "Saint-Émilion – Vineyard Day Trip": {
+      "title": "Saint-Émilion – Excursion vignoble",
+      "description": "Village UNESCO et appellations viticoles mondialement connues à l'est de Bordeaux."
+    },
+    "Base sous-marine – Exhibitions": {
+      "title": "Base sous-marine – Expositions",
+      "description": "Ancienne base sous-marine de la Seconde Guerre mondiale reconvertie en lieu d'art immersif."
+    },
+    "Palais des Beaux-Arts – Major Collection": {
+      "title": "Palais des Beaux-Arts – Grande collection",
+      "description": "L'un des plus grands musées de beaux-arts de France hors Paris."
+    },
+    "Grand Place – Central Square": {
+      "title": "Grand Place – Place centrale",
+      "description": "Vieille Bourse baroque et terrasses animées dans le centre historique."
+    },
+    "Vieille Bourse – Book Market": {
+      "title": "Vieille Bourse – Marché aux livres",
+      "description": "Cour d'une bourse Renaissance avec étals de livres d'occasion."
+    },
+    "Citadelle – Park & Zoo": {
+      "title": "Citadelle – Parc et zoo",
+      "description": "Forteresse Vauban entourée de parc et d'un zoo gratuit."
+    },
+    "Tripostal – Contemporary Exhibitions": {
+      "title": "Tripostal – Expositions contemporaines",
+      "description": "Ancien centre de tri accueillant des expositions d'art et de design."
+    },
+    "Braderie de Lille – Giant Flea Market": {
+      "title": "Braderie de Lille – Grande braderie",
+      "description": "La plus grande braderie d'Europe — tradition du premier week-end de septembre."
+    },
+    "Zénith de Lille – Big Concerts": {
+      "title": "Zénith de Lille – Grands concerts",
+      "description": "Grands artistes en tournée dans le quartier Arena."
+    },
+    "Marché de Wazemmes – Sunday Market": {
+      "title": "Marché de Wazemmes – Marché du dimanche",
+      "description": "Marché multiculturel pour produits, tissus et street food."
+    },
+    "Hospice Comtesse Museum": {
+      "title": "Musée de l'Hospice Comtesse",
+      "description": "Musée dans un hôpital médiéval avec intérieurs flamands et jardins."
+    },
+    "Parlement de Bretagne – Guided Tour": {
+      "title": "Parlement de Bretagne – Visite guidée",
+      "description": "Magnifique bâtiment du parlement breton du XVIIe siècle sur la place principale."
+    },
+    "Les Champs Libres – Museum Quarter": {
+      "title": "Les Champs Libres – Quartier des musées",
+      "description": "Musée de Bretagne, centre des sciences et bibliothèque municipale sous un même toit."
+    },
+    "Parc du Thabor – Rose Garden": {
+      "title": "Parc du Thabor – Roseraie",
+      "description": "Jardin public élégant avec volière, kiosque à musique et 3 000 variétés de roses."
+    },
+    "Marché des Lices – Saturday Market": {
+      "title": "Marché des Lices – Marché du samedi",
+      "description": "L'un des plus grands marchés alimentaires de France, chaque samedi matin."
+    },
+    "Opéra de Rennes – Season Programme": {
+      "title": "Opéra de Rennes – Saison",
+      "description": "Opéra, danse et concerts dans un théâtre du XIXe siècle rénové."
+    },
+    "Rue Saint-Michel – Pub Crawl": {
+      "title": "Rue Saint-Michel – Tournée des bars",
+      "description": "Célèbre « rue de la Soif » bordée de bars étudiants et de musique live."
+    },
+    "Coulée Verte – Urban Greenway": {
+      "title": "Coulée Verte – Voie verte urbaine",
+      "description": "Chemin piéton et cyclable le long d'une ancienne voie ferrée à travers la ville."
+    },
+    "Espace des Sciences – Planetarium": {
+      "title": "Espace des Sciences – Planétarium",
+      "description": "Expositions scientifiques interactives et séances au planétarium."
+    },
+    "Transmusicales – Music Festival": {
+      "title": "Transmusicales – Festival de musique",
+      "description": "Festival international de musique avant-gardiste chaque décembre."
+    },
+    "Cathédrale Notre-Dame – Coronation Church": {
+      "title": "Cathédrale Notre-Dame – Église des sacres",
+      "description": "Cathédrale gothique où furent couronnés les rois de France ; vitraux de Chagall."
+    },
+    "Palais du Tau – Cathedral Treasury": {
+      "title": "Palais du Tau – Trésor de la cathédrale",
+      "description": "Palais musée UNESCO avec regalia du sacre et tapisseries."
+    },
+    "Champagne House Visit – Avenue de Champagne": {
+      "title": "Visite de maison de champagne – Avenue de Champagne",
+      "description": "Visites de caves et dégustations dans les grandes maisons à Épernay et Reims."
+    },
+    "Musée des Beaux-Arts": {
+      "title": "Musée des Beaux-Arts",
+      "description": "Peintures et arts décoratifs dans un ancien palais épiscopal."
+    },
+    "Parc de la Patte d'Oie – Green Escape": {
+      "title": "Parc de la Patte d'Oie – Échappée verte",
+      "description": "Grand parc avec lacs, aires de jeux et prairies ouvertes."
+    },
+    "Basilique Saint-Rémi – Romanesque": {
+      "title": "Basilique Saint-Rémi – Roman",
+      "description": "Basilique romano-gothique et musée de l'abbaye."
+    },
+    "Place Drouet d'Erlon – Café Terrace": {
+      "title": "Place Drouet d'Erlon – Terrasse café",
+      "description": "Place piétonne bordée de restaurants et bars à champagne."
+    },
+    "Automobile Museum Reims-Champagne": {
+      "title": "Musée Automobile Reims-Champagne",
+      "description": "Voitures de collection et patrimoine automobile dans une ancienne usine."
+    },
+    "Montagne de Reims – Forest Hike": {
+      "title": "Montagne de Reims – Randonnée en forêt",
+      "description": "Vignobles de champagne et sentiers forestiers aux portes de la ville."
+    },
+    "Cité du Design – Biennale Hub": {
+      "title": "Cité du Design – Pôle biennale",
+      "description": "Centre de design dans une ancienne manufacture d'armes — événements de la biennale."
+    },
+    "Stade Geoffroy-Guichard – Stadium Tour": {
+      "title": "Stade Geoffroy-Guichard – Visite du stade",
+      "description": "Visites et jours de match dans le légendaire « Chaudron » du football."
+    },
+    "Parc de l'Europe – Lakeside Walk": {
+      "title": "Parc de l'Europe – Promenade au bord du lac",
+      "description": "Parc urbain avec lac, sentiers et installations sportives de plein air."
+    },
+    "Opéra-Théâtre – Performance Night": {
+      "title": "Opéra-Théâtre – Soirée spectacle",
+      "description": "Opéra, théâtre et danse en centre-ville."
+    },
+    "Musée de la Mine – Industrial Heritage": {
+      "title": "Musée de la Mine – Patrimoine industriel",
+      "description": "Histoire de l'extraction du charbon dans un chevalement et lampisterie préservés."
+    },
+    "Crêt de Roc – Panoramic Hike": {
+      "title": "Crêt de Roc – Randonnée panoramique",
+      "description": "Formations rocheuses remarquables et vues sur les contreforts du Pilat."
+    },
+    "Marché Fourière – Local Producers": {
+      "title": "Marché Fourière – Producteurs locaux",
+      "description": "Marché quotidien pour fruits, fromages et spécialités régionales."
+    },
+    "Zénith Saint-Étienne – Concert": {
+      "title": "Zénith Saint-Étienne – Concert",
+      "description": "Grands concerts en arène au sud du centre-ville."
+    },
+    "MuMa – André Malraux Museum": {
+      "title": "MuMa – Musée André Malraux",
+      "description": "Chefs-d'œuvre impressionnistes dans un pavillon de verre face à la mer."
+    },
+    "Église Saint-Joseph – Concrete Landmark": {
+      "title": "Église Saint-Joseph – Monument en béton",
+      "description": "Église-lanterne de Perret — symbole du Havre reconstruit."
+    },
+    "Le Volcan – Culture Centre": {
+      "title": "Le Volcan – Centre culturel",
+      "description": "Centre culturel d'Oscar Niemeyer pour théâtre et expositions."
+    },
+    "Les Bains Des Docks – Aquatic Centre": {
+      "title": "Les Bains Des Docks – Centre aquatique",
+      "description": "Piscines et spa conçus par Jean Nouvel."
+    },
+    "Plage du Havre – Seaside Promenade": {
+      "title": "Plage du Havre – Promenade en bord de mer",
+      "description": "Plage de galets, promenade et bars de plage le long de la Manche."
+    },
+    "Appartement Témoin Perret – UNESCO Tour": {
+      "title": "Appartement Témoin Perret – Visite UNESCO",
+      "description": "Appartement modèle dans l'architecture d'après-guerre de Perret classée UNESCO."
+    },
+    "Les Docks Vauban – Shopping & Cinema": {
+      "title": "Les Docks Vauban – Shopping et cinéma",
+      "description": "Centre commercial en bord de mer dans d'anciens entrepôts du XIXe siècle."
+    },
+    "Estuaire de la Seine – Coastal Path": {
+      "title": "Estuaire de la Seine – Sentier côtier",
+      "description": "Promenades sur les falaises et vues là où la Seine rejoint la Manche."
+    },
+    "Hangar 8 – Live Music": {
+      "title": "Hangar 8 – Musique live",
+      "description": "Ancien entrepôt reconverti pour concerts et soirées club."
+    },
+    "Mont Faron – Cable Car & Zoo": {
+      "title": "Mont Faron – Téléphérique et zoo",
+      "description": "Téléphérique jusqu'au zoo en hauteur avec vue panoramique sur le port."
+    },
+    "Musée National de la Marine": {
+      "title": "Musée national de la Marine",
+      "description": "Histoire navale française dans l'arsenal historique."
+    },
+    "Opéra de Toulon – Evening Show": {
+      "title": "Opéra de Toulon – Spectacle du soir",
+      "description": "Opéra et concerts dans le grand théâtre du XIXe siècle."
+    },
+    "Plages du Mourillon – Beach Day": {
+      "title": "Plages du Mourillon – Journée plage",
+      "description": "Plages de sable et restaurants en bord de mer à l'est du port."
+    },
+    "Marché du Cours Lafayette – Provençal Market": {
+      "title": "Marché du Cours Lafayette – Marché provençal",
+      "description": "Marché quotidien coloré pour produits, fleurs et artisanat local."
+    },
+    "Old Town & Port – Harbour Walk": {
+      "title": "Vieille ville et port – Promenade portuaire",
+      "description": "Fontaines, cafés et ambiance navale autour du port militaire."
+    },
+    "Sentier des Douaniers – Coastal Hike": {
+      "title": "Sentier des Douaniers – Randonnée côtière",
+      "description": "Sentier côtier panoramique jusqu'au Cap Brun et aux criques secrètes."
+    },
+    "Zénith Oméga – Arena Concert": {
+      "title": "Zénith Oméga – Concert en arène",
+      "description": "Grande salle de concert dans l'est de l'agglomération."
+    },
+    "Cinéma Pathé Toulon – Blockbusters": {
+      "title": "Cinéma Pathé Toulon – Blockbusters",
+      "description": "Multiplex en bord de mer pour nouvelles sorties et événements."
+    },
+    "Bastille Cable Car – Fortress Views": {
+      "title": "Téléphérique de la Bastille – Vues sur la forteresse",
+      "description": "Téléphérique en bulles jusqu'à la forteresse en hauteur et panoramas alpins."
+    },
+    "Musée de Grenoble – Fine Arts": {
+      "title": "Musée de Grenoble – Beaux-arts",
+      "description": "Remarquable collection de l'Antiquité à l'art contemporain."
+    },
+    "Parc Paul Mistral – City Park": {
+      "title": "Parc Paul Mistral – Parc urbain",
+      "description": "Cœur vert avec kiosque à musique, skatepark et événements estivaux."
+    },
+    "Summum – Concert Hall": {
+      "title": "Summum – Salle de concert",
+      "description": "Grands artistes en tournée dans le quartier Alpexpo."
+    },
+    "Centre de l'Innovation Alpes – Science": {
+      "title": "Centre de l'Innovation Alpes – Sciences",
+      "description": "Expositions scientifiques et technologiques interactives pour tous les âges."
+    },
+    "Jardin de Ville – Central Garden": {
+      "title": "Jardin de Ville – Jardin central",
+      "description": "Jardin à la française ombragé avec carrousel au bord de l'Isère."
+    },
+    "MC2 – Contemporary Dance": {
+      "title": "MC2 – Danse contemporaine",
+      "description": "Centre chorégraphique national pour danse et performance."
+    },
+    "Marché Saint-Bruno – Farmers' Market": {
+      "title": "Marché Saint-Bruno – Marché de producteurs",
+      "description": "Fromages locaux, noix et produits de montagne."
+    },
+    "Chartreuse Mountains – Day Trip": {
+      "title": "Massif de la Chartreuse – Excursion d'une journée",
+      "description": "Distillerie de la Grande Chartreuse et sentiers forestiers dans les Préalpes."
+    },
+    "Palais des Ducs – Musée des Beaux-Arts": {
+      "title": "Palais des Ducs – Musée des Beaux-Arts",
+      "description": "Palais des ducs abritant l'un des plus anciens musées de beaux-arts de France."
+    },
+    "Owl's Trail – Self-Guided Walk": {
+      "title": "Parcours de la Chouette – Balade libre",
+      "description": "Des chouettes en laiton vous guident dans les rues historiques et les cours."
+    },
+    "Les Halles – Food Market": {
+      "title": "Les Halles – Marché alimentaire",
+      "description": "Marché couvert de style Baltard conçu avec Gustave Eiffel."
+    },
+    "Musée de la Vie Bourguignonne": {
+      "title": "Musée de la Vie Bourguignonne",
+      "description": "Traditions populaires bourguignonnes dans un hôtel particulier Renaissance."
+    },
+    "Jardin Darcy – Romantic Park": {
+      "title": "Jardin Darcy – Parc romantique",
+      "description": "Parc en terrasses avec fontaine au pied des remparts de la ville."
+    },
+    "Opéra de Dijon – Classical Season": {
+      "title": "Opéra de Dijon – Saison classique",
+      "description": "Opéra, orchestre et ballet dans un théâtre du XIXe siècle rénové."
+    },
+    "Route des Grands Crus – Wine Trail": {
+      "title": "Route des Grands Crus – Route des vins",
+      "description": "Vignobles bourguignons mondialement connus et dégustations en cave."
+    },
+    "Philharmonie de Dijon – Concert": {
+      "title": "Philharmonie de Dijon – Concert",
+      "description": "Concerts symphoniques et solistes invités."
+    },
+    "Cité internationale de la gastronomie": {
+      "title": "Cité internationale de la gastronomie",
+      "description": "Expérience interactive autour de la cuisine et du vin bourguignons."
+    },
+    "Château d'Angers – Apocalypse Tapestry": {
+      "title": "Château d'Angers – Tapisserie de l'Apocalypse",
+      "description": "Forteresse médiévale abritant la monumentale Tapisserie de l'Apocalypse."
+    },
+    "Terra Botanica – Plant Theme Park": {
+      "title": "Terra Botanica – Parc à thème végétal",
+      "description": "Aventures botaniques et attractions célébrant le monde végétal."
+    },
+    "Collégiale Saint-Martin – Romanesque": {
+      "title": "Collégiale Saint-Martin – Roman",
+      "description": "Collégiale romane restaurée dans la vieille ville."
+    },
+    "Parc Balzac – Riverside Walk": {
+      "title": "Parc Balzac – Promenade en bord de rivière",
+      "description": "Parc verdoyant le long de la Maine avec aires de jeux."
+    },
+    "Grand Théâtre – Opera & Dance": {
+      "title": "Grand Théâtre – Opéra et danse",
+      "description": "Opéra, théâtre et concerts en centre-ville."
+    },
+    "Marché de la Doutre – Sunday Market": {
+      "title": "Marché de la Doutre – Marché du dimanche",
+      "description": "Marché du quartier historique pour produits locaux et artisanat."
+    },
+    "Anjou Wine Route – Vineyard Visit": {
+      "title": "Route des vins d'Anjou – Visite de vignoble",
+      "description": "Dégustations de Chenin moelleux et Cabernet d'Anjou dans les vignobles de la Loire."
+    },
+    "Jean Lurçat Museum – Contemporary Tapestry": {
+      "title": "Musée Jean Lurçat – Tapisserie contemporaine",
+      "description": "Art de la tapisserie moderne dans un ancien hôpital."
+    },
+    "Arènes de Nîmes – Roman Amphitheatre": {
+      "title": "Arènes de Nîmes – Amphithéâtre romain",
+      "description": "Arène romaine la mieux conservée, accueillant encore concerts et corridas."
+    },
+    "Maison Carrée – Roman Temple": {
+      "title": "Maison Carrée – Temple romain",
+      "description": "Temple augustéen exceptionnellement conservé sur le forum."
+    },
+    "Musée de la Romanité": {
+      "title": "Musée de la Romanité",
+      "description": "Remarquable musée archéologique face à l'amphithéâtre."
+    },
+    "Jardins de la Fontaine – Baroque Gardens": {
+      "title": "Jardins de la Fontaine – Jardins baroques",
+      "description": "Jardins du XVIIIe siècle construits autour d'une source sacrée."
+    },
+    "Pont du Gard – Aqueduct Day Trip": {
+      "title": "Pont du Gard – Excursion aqueduc",
+      "description": "Pont-aqueduc romain UNESCO au-dessus du Gardon."
+    },
+    "Carré d'Art – Contemporary Museum": {
+      "title": "Carré d'Art – Musée contemporain",
+      "description": "Musée d'art contemporain et bibliothèque conçus par Norman Foster."
+    },
+    "Feria de Nîmes – Festival Weekend": {
+      "title": "Feria de Nîmes – Week-end festival",
+      "description": "Fête traditionnelle taurine avec fêtes de rue (printemps et automne)."
+    },
+    "Marché des Halles – Food Market": {
+      "title": "Marché des Halles – Marché alimentaire",
+      "description": "Marché couvert pour tapenade, olives et produits du Gard."
+    },
+    "Uzes & Provence Gate – Day Trip": {
+      "title": "Uzès et Porte de Provence – Excursion",
+      "description": "Duché médiéval et marché du samedi à courte distance au nord."
+    },
+    "TNP – Théâtre National Populaire": {
+      "title": "TNP – Théâtre National Populaire",
+      "description": "Grand théâtre national pour le drame, les classiques et la création."
+    },
+    "Gratte-Ciel – Art Deco District": {
+      "title": "Gratte-Ciel – Quartier Art déco",
+      "description": "Ensemble HLM des années 1920-30 — monument moderniste."
+    },
+    "Institut Lumière – Cinema Museum": {
+      "title": "Institut Lumière – Musée du cinéma",
+      "description": "Berceau du cinéma : villa et musée des frères Lumière (à proximité)."
+    },
+    "Parc de la Tête d'Or – North Entrance": {
+      "title": "Parc de la Tête d'Or – Entrée nord",
+      "description": "Accès direct au grand parc lyonnais par les portes nord."
+    },
+    "Les Ateliers Frappaz – Contemporary Art": {
+      "title": "Les Ateliers Frappaz – Art contemporain",
+      "description": "Ateliers d'artistes et expositions dans une ancienne imprimerie."
+    },
+    "Carré de Soie – Market & Shopping": {
+      "title": "Carré de Soie – Marché et shopping",
+      "description": "Quartier moderne avec hub tram, boutiques et marché du week-end."
+    },
+    "Le Transbordeur – Live Music": {
+      "title": "Le Transbordeur – Musique live",
+      "description": "Salle de concert prisée pour rock, électro et musiques du monde."
+    },
+    "Piscine du Charpennes – Swim": {
+      "title": "Piscine du Charpennes – Baignade",
+      "description": "Piscine municipale Art déco et centre bien-être."
+    },
+    "Festival of Lights – Lyon Fringe": {
+      "title": "Fête des Lumières – Scène villeurbannaise",
+      "description": "Installations lumineuses de quartier pendant la fête lyonnaise de décembre."
+    }
+  }
+}

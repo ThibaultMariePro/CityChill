@@ -46,7 +46,48 @@ def _load_curated(city_key: str) -> dict | None:
         return None
 
 
-def _curated_events(place: Place) -> list[Item]:
+_FR_OVERLAYS: dict | None = None
+
+
+def _load_fr_overlays() -> dict[str, dict[str, str]]:
+    global _FR_OVERLAYS
+    if _FR_OVERLAYS is None:
+        path = _DATA_DIR / "curated_fr.json"
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                _FR_OVERLAYS = data.get("by_title", {}) if isinstance(data, dict) else {}
+            except Exception:
+                _FR_OVERLAYS = {}
+        else:
+            _FR_OVERLAYS = {}
+    return _FR_OVERLAYS
+
+
+def _localized_curated(raw: dict, field: str, lang: str) -> str | None:
+    """Resolve a curated event text field for the requested language."""
+    lng = normalize_lang(lang)
+    prefer = _lang_preference(lang)
+    value = raw.get(field)
+    fr_field = f"{field}_fr"
+
+    if isinstance(value, dict):
+        return _pick_lang(value, prefer=prefer)
+
+    if lng == "fr":
+        if raw.get(fr_field):
+            return raw[fr_field]
+        en_title = raw.get("title")
+        if isinstance(en_title, dict):
+            en_title = _pick_lang(en_title, prefer=("en", "fr"))
+        overlay = _load_fr_overlays().get(en_title or "", {})
+        if overlay.get(field):
+            return overlay[field]
+
+    return value if isinstance(value, str) else None
+
+
+def _curated_events(place: Place, *, lang: str = "en") -> list[Item]:
     dataset = _load_curated(place.name)
     if not dataset:
         return []
@@ -63,15 +104,24 @@ def _curated_events(place: Place) -> list[Item]:
         category = raw.get("category", "culture")
         if not is_known_category(category):
             category = "culture"
+        title_en = raw["title"] if isinstance(raw["title"], str) else _pick_lang(
+            raw["title"], prefer=("en", "fr")
+        )
+        title = _localized_curated(raw, "title", lang) or title_en
+        keyword = (
+            _localized_curated(raw, "keyword", lang)
+            or raw.get("keyword")
+            or category_keyword(category, kind="event")
+        )
         items.append(
             Item(
-                id=_make_id(raw["title"]),
+                id=_make_id(title_en or title or ""),
                 kind="event",
-                title=raw["title"],
+                title=title or title_en or "",
                 category=category,
-                keyword=raw.get("keyword") or category_keyword(category, kind="event"),
-                description=raw.get("description"),
-                location_name=raw.get("venue"),
+                keyword=keyword,
+                description=_localized_curated(raw, "description", lang),
+                location_name=_localized_curated(raw, "venue", lang) or raw.get("venue"),
                 latitude=raw.get("latitude"),
                 longitude=raw.get("longitude"),
                 start=start_date.isoformat(),
@@ -232,7 +282,7 @@ async def get_events(
     if live:
         return live, notices
 
-    curated = _curated_events(place)
+    curated = _curated_events(place, lang=lang)
     if curated:
         if not _has_openagenda_key(openagenda_key):
             notices.append(notice_curated_highlights(lang))
