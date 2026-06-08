@@ -19,6 +19,61 @@ CATEGORIES: dict[str, dict[str, str]] = {
 
 DEFAULT_CATEGORY = "culture"
 
+# Short labels used on card headers when no finer-grained OSM keyword is available.
+CATEGORY_KEYWORDS: dict[str, str] = {
+    "nature": "Nature",
+    "culture": "Culture",
+    "music": "Music",
+    "sports": "Sports",
+    "family": "Family",
+    "food": "Food & Drink",
+    "markets": "Markets",
+    "festival": "Festival",
+}
+
+# Human-friendly header keywords for common OpenStreetMap tag values.
+OSM_VALUE_KEYWORDS: dict[str, str] = {
+    "park": "Park",
+    "garden": "Garden",
+    "nature_reserve": "Nature reserve",
+    "playground": "Playground",
+    "water_park": "Water park",
+    "swimming_pool": "Swimming pool",
+    "sports_centre": "Sports centre",
+    "fitness_centre": "Gym",
+    "pitch": "Sports pitch",
+    "stadium": "Stadium",
+    "marina": "Marina",
+    "museum": "Museum",
+    "gallery": "Gallery",
+    "artwork": "Artwork",
+    "viewpoint": "Viewpoint",
+    "zoo": "Zoo",
+    "theme_park": "Theme park",
+    "aquarium": "Aquarium",
+    "attraction": "Attraction",
+    "theatre": "Theatre",
+    "cinema": "Cinema",
+    "arts_centre": "Arts centre",
+    "nightclub": "Nightclub",
+    "bar": "Bar",
+    "pub": "Pub",
+    "biergarten": "Beer garden",
+    "cafe": "Café",
+    "restaurant": "Restaurant",
+    "food_court": "Food court",
+    "marketplace": "Market",
+    "fountain": "Fountain",
+    "monument": "Monument",
+    "memorial": "Memorial",
+    "castle": "Castle",
+    "ruins": "Ruins",
+    "archaeological_site": "Archaeological site",
+    "mall": "Shopping mall",
+    "beach": "Beach",
+    "peak": "Peak",
+}
+
 # Map OpenStreetMap tags (key=value) to our categories. Order matters: the first
 # matching rule wins.
 OSM_TAG_TO_CATEGORY: list[tuple[str, str, str]] = [
@@ -70,6 +125,43 @@ OUTDOOR_CATEGORIES = {"nature", "sports", "markets"}
 
 def category_label(category_id: str) -> str:
     return CATEGORIES.get(category_id, {}).get("label", category_id.title())
+
+
+def category_keyword(category_id: str, *, kind: str = "activity") -> str:
+    """Fallback header keyword from the normalised category (or kind)."""
+    if kind == "event" and category_id == "festival":
+        return "Festival"
+    if kind == "event":
+        return CATEGORY_KEYWORDS.get(category_id, category_label(category_id))
+    return CATEGORY_KEYWORDS.get(category_id, category_label(category_id))
+
+
+def _humanize_tag(value: str) -> str:
+    return value.replace("_", " ").replace("-", " ").strip().title()
+
+
+def keyword_from_osm_tags(tags: dict[str, str]) -> str | None:
+    """Derive a specific header keyword from raw OSM tags, if possible."""
+    for key, value, _category in OSM_TAG_TO_CATEGORY:
+        if tags.get(key) == value:
+            return OSM_VALUE_KEYWORDS.get(value, _humanize_tag(value))
+    if tags.get("shop") == "mall":
+        return OSM_VALUE_KEYWORDS["mall"]
+    return None
+
+
+def resolve_keyword(
+    *,
+    category: str,
+    kind: str = "activity",
+    osm_tags: dict[str, str] | None = None,
+) -> str:
+    """Pick the best card-header keyword for an item."""
+    if osm_tags:
+        specific = keyword_from_osm_tags(osm_tags)
+        if specific:
+            return specific
+    return category_keyword(category, kind=kind)
 
 
 def is_known_category(category_id: str) -> bool:

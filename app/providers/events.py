@@ -14,7 +14,7 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
-from app.categories import is_known_category
+from app.categories import category_keyword, is_known_category
 from app.config import settings
 from app.models import Item, Place
 from app.providers.http import build_client
@@ -60,6 +60,7 @@ def _curated_events(place: Place) -> list[Item]:
                 kind="event",
                 title=raw["title"],
                 category=category,
+                keyword=raw.get("keyword") or category_keyword(category, kind="event"),
                 description=raw.get("description"),
                 location_name=raw.get("venue"),
                 latitude=raw.get("latitude"),
@@ -164,6 +165,7 @@ async def _openagenda_events(place: Place) -> list[Item]:
                 kind="event",
                 title=title,
                 category=category,
+                keyword=category_keyword(category, kind="event"),
                 description=_pick_lang(ev.get("description")),
                 image_url=(ev.get("image") or {}).get("base"),
                 location_name=location.get("name") or place.name,

@@ -12,6 +12,7 @@ from app.categories import (
     OSM_TAG_TO_CATEGORY,
     OUTDOOR_CATEGORIES,
     category_label,
+    resolve_keyword,
 )
 from app.models import Item, Place
 from app.providers.http import run_overpass
@@ -117,6 +118,7 @@ async def get_activities(place: Place, limit: int = 120) -> list[Item]:
                 kind="activity",
                 title=name,
                 category=category,
+                keyword=resolve_keyword(category=category, kind="activity", osm_tags=tags),
                 description=description,
                 location_name=tags.get("addr:street") or place.name,
                 latitude=lat,

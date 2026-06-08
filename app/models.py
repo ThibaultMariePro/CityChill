@@ -45,6 +45,7 @@ class Item(BaseModel):
     kind: str  # "activity" | "event"
     title: str
     category: str
+    keyword: str | None = None  # short type label shown on the card header (e.g. "Restaurant")
     description: str | None = None
     image_url: str | None = None
     location_name: str | None = None

@@ -98,6 +98,13 @@
   const catMeta = (id) =>
     state.categories.find((c) => c.id === id) || { label: id, emoji: "✨" };
 
+  function itemKeyword(item) {
+    if (item.keyword) return item.keyword;
+    const meta = catMeta(item.category);
+    if (item.kind === "event") return meta.label.split(" & ")[0];
+    return meta.label;
+  }
+
   const fmtDay = (iso) => {
     if (!iso) return null;
     return new Date(iso + "T00:00:00").toLocaleDateString(undefined, {
@@ -244,8 +251,12 @@
     node.dataset.id = item.id;
 
     const media = el("div", `card__media cat-${esc(item.category)}`);
+    const keyword = itemKeyword(item);
     media.innerHTML = `
-      <span class="card__emoji">${meta.emoji}</span>
+      <div class="card__header">
+        <p class="card__keyword">${esc(keyword)}</p>
+        <span class="card__emoji" aria-hidden="true">${meta.emoji}</span>
+      </div>
       <span class="card__kind">${item.kind === "event" ? "Event" : "Activity"}</span>
       <button class="card__fav ${isFav(item.id) ? "is-active" : ""}" title="Save to favorites" aria-label="Save to favorites">
         ${isFav(item.id) ? "❤️" : "🤍"}
