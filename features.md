@@ -6,3 +6,4 @@
 
 - add a clickable option to reveal a quick description of the event on cards
 
+- add the possibility to switch between the different color themes in the parameters menu

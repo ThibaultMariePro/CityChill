@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import unicodedata
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -26,8 +27,16 @@ def _make_id(value: str) -> str:
     return "evt-" + hashlib.sha1(value.encode("utf-8")).hexdigest()[:12]
 
 
+def _city_file_key(name: str) -> str:
+    """Normalize a geocoded city name to a curated JSON filename stem."""
+    key = name.strip().lower()
+    key = unicodedata.normalize("NFD", key)
+    key = "".join(c for c in key if unicodedata.category(c) != "Mn")
+    return key.replace(" ", "-")
+
+
 def _load_curated(city_key: str) -> dict | None:
-    path = _DATA_DIR / f"{city_key}_events.json"
+    path = _DATA_DIR / f"{_city_file_key(city_key)}_events.json"
     if not path.exists():
         return None
     try:
@@ -37,8 +46,7 @@ def _load_curated(city_key: str) -> dict | None:
 
 
 def _curated_events(place: Place) -> list[Item]:
-    city_key = place.name.strip().lower()
-    dataset = _load_curated(city_key)
+    dataset = _load_curated(place.name)
     if not dataset:
         return []
 
