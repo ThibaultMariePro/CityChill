@@ -796,6 +796,22 @@
   }
 
   /* ── pinned chips ────────────────────────────────────────────────────── */
+  function groupPinsForDisplay(pins) {
+    const groups = [];
+    const byCity = new Map();
+
+    for (const pin of pins) {
+      const key = pin.postcode ? `city:${pin.name}` : `place:${pin.id}`;
+      if (!byCity.has(key)) {
+        const group = { city: pin.postcode ? pin.name : pinLabel(pin), pins: [] };
+        byCity.set(key, group);
+        groups.push(group);
+      }
+      byCity.get(key).pins.push(pin);
+    }
+    return groups;
+  }
+
   function renderPinnedChips() {
     const bar       = $("#pinned-bar");
     const container = $("#pinned-chips");
@@ -803,19 +819,38 @@
     bar.hidden        = false;
     container.innerHTML = "";
 
-    state.pins.forEach((pin) => {
-      const loaded = Boolean(state.pinData[pin.id]);
-      const city   = pin.postcode ? pinSubtitle(pin) : pinLabel(pin);
-      const code   = pin.postcode || "";
-      const removeLabel = code ? `${city} (${code})` : city;
-      const chip = el("div", `pin-chip${!loaded ? " is-loading" : ""}`, "");
-      chip.innerHTML = `
-        <span class="pin-chip__dot${!loaded ? " is-loading" : ""}"></span>
-        <span class="pin-chip__name">${esc(city)}</span>
-        ${code ? `<span class="pin-chip__code">${esc(code)}</span>` : ""}
-        <button class="pin-chip__remove" type="button" title="Remove ${esc(removeLabel)}" aria-label="Remove ${esc(removeLabel)}">×</button>`;
-      chip.querySelector(".pin-chip__remove").addEventListener("click", () => removePin(pin.id));
-      container.appendChild(chip);
+    groupPinsForDisplay(state.pins).forEach((group) => {
+      const collapse = group.pins.length > 1 && group.pins.every((p) => p.postcode);
+      const loaded = group.pins.every((p) => state.pinData[p.id]);
+      const city = group.city;
+
+      if (collapse) {
+        const removeLabel = `${city} (${group.pins.length} postal codes)`;
+        const chip = el("div", `pin-chip pin-chip--group${!loaded ? " is-loading" : ""}`, "");
+        chip.innerHTML = `
+          <span class="pin-chip__dot${!loaded ? " is-loading" : ""}"></span>
+          <span class="pin-chip__name">${esc(city)}</span>
+          <button class="pin-chip__remove" type="button" title="Remove ${esc(removeLabel)}" aria-label="Remove ${esc(removeLabel)}">×</button>`;
+        chip.querySelector(".pin-chip__remove").addEventListener("click", () => {
+          removePins(group.pins.map((p) => p.id));
+        });
+        container.appendChild(chip);
+        return;
+      }
+
+      group.pins.forEach((pin) => {
+        const pinLoaded = Boolean(state.pinData[pin.id]);
+        const code = pin.postcode || "";
+        const removeLabel = code ? `${city} (${code})` : city;
+        const chip = el("div", `pin-chip${!pinLoaded ? " is-loading" : ""}`, "");
+        chip.innerHTML = `
+          <span class="pin-chip__dot${!pinLoaded ? " is-loading" : ""}"></span>
+          <span class="pin-chip__name">${esc(city)}</span>
+          ${code ? `<span class="pin-chip__code">${esc(code)}</span>` : ""}
+          <button class="pin-chip__remove" type="button" title="Remove ${esc(removeLabel)}" aria-label="Remove ${esc(removeLabel)}">×</button>`;
+        chip.querySelector(".pin-chip__remove").addEventListener("click", () => removePin(pin.id));
+        container.appendChild(chip);
+      });
     });
   }
 
@@ -936,10 +971,14 @@
   }
 
   function removePin(id) {
-    const idx = state.pins.findIndex((p) => p.id === id);
-    if (idx === -1) return;
-    state.pins.splice(idx, 1);
-    delete state.pinData[id];
+    removePins([id]);
+  }
+
+  function removePins(ids) {
+    const idSet = new Set(ids);
+    if (!idSet.size) return;
+    state.pins = state.pins.filter((p) => !idSet.has(p.id));
+    ids.forEach((id) => delete state.pinData[id]);
     reloadSelection();
   }
 
