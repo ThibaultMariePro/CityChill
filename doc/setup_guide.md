@@ -1,0 +1,161 @@
+# CityChilly — Setup Guide
+
+Welcome! This guide gets CityChilly running on your computer or server in just a
+few minutes. No coding experience required. 🙂
+
+---
+
+## The fastest way: Docker (recommended)
+
+This is the easiest method and works the same on Windows, macOS and Linux.
+
+### 1. Install Docker
+
+If you don't have it yet, install **Docker Desktop** (Windows/macOS) or **Docker
+Engine** (Linux) from <https://docs.docker.com/get-docker/>.
+
+### 2. Start CityChilly
+
+Open a terminal **in the project folder** (the one containing
+`docker-compose.yml`) and run:
+
+```bash
+docker compose up -d --build
+```
+
+That's it! The first run downloads everything and builds the app (about a
+minute).
+
+### 3. Open the app
+
+Go to **<http://localhost:8000>** in your browser.
+
+You should see CityChilly already exploring **Nantes**. 🎉
+
+### 4. Stop it later
+
+```bash
+docker compose down
+```
+
+---
+
+## Using the app
+
+1. **Search a city** — type a name in the top bar (e.g. *Nantes*, *Lisbon*,
+   *Kyoto*) and press **Explore**.
+2. **Browse** the cards. Each shows whether it's an **Event** or **Activity**,
+   the date, the place, the category and — for outdoor things — a **weather
+   hint**.
+3. **Filter** by category (the colored chips), by type
+   (**All / Events / Activities**), or flip **Outdoor only**.
+4. **Plan** — click **+ Add to agenda** to build your day-by-day roadmap in the
+   **My Agenda** tab.
+5. **Save** — click the **heart** on any card to keep it in **Favorites**.
+6. **Check the source** — every card has a **↗ Source** button that opens the
+   original, official page.
+7. **Switch theme** — use the 🌙 / ☀️ button (top right) for light or dark mode.
+
+> Your agenda and favorites are saved **in your browser**, so they'll still be
+> there next time you open CityChilly on the same device.
+
+---
+
+## Optional: live events for *any* city
+
+Out of the box, CityChilly shows **curated event highlights for Nantes** plus
+**live activities for any city** (from OpenStreetMap). If you'd like **live
+events for any city in the world**, connect a free **OpenAgenda** key:
+
+1. Create a free key at <https://developers.openagenda.com/>.
+2. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+3. Open `.env` and set your key:
+   ```
+   OPENAGENDA_KEY=your_key_here
+   ```
+4. Restart the app:
+   ```bash
+   docker compose up -d --build
+   ```
+
+---
+
+## Changing the colors (palette)
+
+CityChilly's colors live in one simple file: **`config/theme.json`**.
+
+To switch to a different look, open it and change the `"active"` line to one of
+the built-in palettes:
+
+```json
+"active": "ocean",
+```
+
+Built-in palettes: **sunset** (warm default), **citrus**, **berry**, **ember**,
+**ocean**, **forest**.
+
+Then just **refresh your browser** — no rebuild needed (the file is mounted into
+the container). The whole app recolors: buttons, tabs, chips, cards and
+background.
+
+Want your own colors? Edit a palette's `brand` values (any CSS color works) or
+add a new palette and point `"active"` at it. You can also override the choice
+without editing the file by setting `CITYCHILLY_ACTIVE_PALETTE` in `.env`.
+
+---
+
+## Putting CityChilly on the internet
+
+CityChilly listens on port **8000**. To make it reachable from the internet, you
+can:
+
+- **Run it on a server** (a small cloud VM works great) and point a domain at it.
+- Put a reverse proxy with HTTPS in front of it, for example **Caddy**:
+
+  ```caddyfile
+  citychilly.example.com {
+      reverse_proxy localhost:8000
+  }
+  ```
+
+  Caddy automatically obtains a free TLS certificate, so your app is served over
+  `https://`.
+
+- Or use any tunnel (e.g. **Cloudflare Tunnel**, **ngrok**) for a quick public
+  URL during testing.
+
+To change the public port, set `CITYCHILLY_PORT` in your `.env` (e.g.
+`CITYCHILLY_PORT=80`).
+
+---
+
+## Running without Docker (for developers)
+
+> Requires **Python 3.11 or 3.12** (Python 3.13/3.14 may lack some prebuilt
+> dependencies).
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Then open <http://localhost:8000>.
+
+---
+
+## Troubleshooting
+
+| Problem | What to do |
+|---------|------------|
+| "City lookup service unavailable" | Check your internet connection; the app needs to reach the open data APIs. |
+| Activities list is empty | The OpenStreetMap (Overpass) service can be briefly busy — wait a moment and search again. |
+| Events only show for Nantes | That's expected without an OpenAgenda key. Add one (see above) for live events anywhere. |
+| Port 8000 already in use | Set a different `CITYCHILLY_PORT` in `.env` and restart. |
+| Favorites/agenda disappeared | They're stored per-browser/device. Use the same browser, and avoid clearing site data. |
+
+Enjoy exploring! 🌍

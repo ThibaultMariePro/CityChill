@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="CityChilly - discover activities and outdoor events for any city, manage your agenda and save favorites." />
+  <meta name="theme-color" content="#ff7a59" />
+  <title>CityChilly · Discover your city</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/logo.svg" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <!-- Color palette generated from config/theme.json (loaded last so it wins). -->
+  <link rel="stylesheet" href="/api/theme.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <a class="brand" href="/" aria-label="CityChilly home">
+        <img src="/assets/logo.svg" alt="" class="brand__logo" width="34" height="34" />
+        <span class="brand__name">City<span class="brand__accent">Chilly</span></span>
+      </a>
+
+      <form id="search-form" class="search" role="search">
+        <span class="search__icon" aria-hidden="true">🔍</span>
+        <input
+          id="city-input"
+          class="search__input"
+          type="text"
+          name="city"
+          placeholder="Search a city (e.g. Nantes, Lisbon, Kyoto)…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button class="search__btn" type="submit">Explore</button>
+      </form>
+
+      <button id="theme-toggle" class="icon-btn" title="Toggle light / dark" aria-label="Toggle light / dark">
+        <span class="theme-toggle__icon">🌙</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="hero" id="hero">
+      <div class="hero__text">
+        <p class="hero__eyebrow">Now exploring</p>
+        <h1 class="hero__title" id="place-name">Nantes</h1>
+        <p class="hero__subtitle" id="place-sub">France</p>
+      </div>
+      <div class="hero__weather" id="weather-strip" aria-label="Weather forecast"></div>
+    </section>
+
+    <div id="notices" class="notices" hidden></div>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab is-active" data-tab="discover" role="tab">🧭 Discover</button>
+      <button class="tab" data-tab="agenda" role="tab">🗓️ My Agenda <span class="tab__count" id="agenda-count">0</span></button>
+      <button class="tab" data-tab="favorites" role="tab">❤️ Favorites <span class="tab__count" id="fav-count">0</span></button>
+    </nav>
+
+    <!-- Discover -->
+    <section class="panel is-active" id="panel-discover" role="tabpanel">
+      <div class="toolbar">
+        <div class="chips" id="category-chips"></div>
+        <div class="toolbar__right">
+          <div class="segmented" id="kind-filter">
+            <button class="seg is-active" data-kind="all">All</button>
+            <button class="seg" data-kind="event">Events</button>
+            <button class="seg" data-kind="activity">Activities</button>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="outdoor-only" />
+            <span class="switch__track"><span class="switch__thumb"></span></span>
+            <span class="switch__label">Outdoor only</span>
+          </label>
+        </div>
+      </div>
+      <div class="results-meta" id="results-meta"></div>
+      <div class="grid" id="discover-grid"></div>
+      <div class="empty" id="discover-empty" hidden></div>
+    </section>
+
+    <!-- Agenda -->
+    <section class="panel" id="panel-agenda" role="tabpanel">
+      <div class="panel__head">
+        <h2>My Agenda</h2>
+        <p class="panel__hint">Your hand-picked roadmap, sorted by date. Stored on this device.</p>
+      </div>
+      <div id="agenda-list" class="agenda"></div>
+      <div class="empty" id="agenda-empty">
+        <div class="empty__emoji">🗓️</div>
+        <h3>Your agenda is empty</h3>
+        <p>Add events and activities from the Discover tab to build your roadmap.</p>
+      </div>
+    </section>
+
+    <!-- Favorites -->
+    <section class="panel" id="panel-favorites" role="tabpanel">
+      <div class="panel__head">
+        <h2>Favorites</h2>
+        <p class="panel__hint">Everything you loved, saved on this device.</p>
+      </div>
+      <div class="grid" id="favorites-grid"></div>
+      <div class="empty" id="favorites-empty">
+        <div class="empty__emoji">❤️</div>
+        <h3>No favorites yet</h3>
+        <p>Tap the heart on any card to keep it here.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>
+      CityChilly · data from
+      <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>,
+      <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> &amp;
+      curated venue sources. Every card links to its original source.
+    </p>
+  </footer>
+
+  <div id="loading" class="loading" hidden>
+    <div class="loading__spinner"></div>
+    <p id="loading-text">Finding cool things to do…</p>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

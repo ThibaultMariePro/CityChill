@@ -1,0 +1,19 @@
+services:
+  citychilly:
+    build: .
+    image: citychilly:latest
+    container_name: citychilly
+    ports:
+      - "${CITYCHILLY_PORT:-8000}:8000"
+    environment:
+      # Optional: pull live events anywhere with an OpenAgenda key.
+      OPENAGENDA_KEY: ${OPENAGENDA_KEY:-}
+      CITYCHILLY_DEFAULT_CITY: ${CITYCHILLY_DEFAULT_CITY:-Nantes}
+      CITYCHILLY_CACHE_TTL: ${CITYCHILLY_CACHE_TTL:-1800}
+      # Optional: override the palette chosen in config/theme.json.
+      CITYCHILLY_ACTIVE_PALETTE: ${CITYCHILLY_ACTIVE_PALETTE:-}
+    volumes:
+      # Edit config/theme.json on the host and just refresh the browser —
+      # no rebuild needed to change the color palette.
+      - ./config:/app/config:ro
+    restart: unless-stopped

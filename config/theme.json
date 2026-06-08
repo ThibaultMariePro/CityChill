@@ -1,0 +1,187 @@
+{
+  "_comment": "CityChilly color palette config. Change \"active\" to one of the palette IDs below, or edit any palette's colors. Save the file and refresh the browser (no rebuild needed with the Docker volume mount). You can also override the active palette with the CITYCHILLY_ACTIVE_PALETTE env var. Each palette defines: brand (accent colors), light (light-mode surface/text/border colors), and dark (dark-mode surface/text/border colors).",
+
+  "active": "berry",
+
+  "palettes": {
+    "sunset": {
+      "label": "Sunset (warm, default)",
+      "brand": {
+        "coral":      "#ff7a59",
+        "coral-deep": "#f0572f",
+        "amber":      "#ffb547",
+        "rose":       "#ff5d8f",
+        "plum":       "#7c5cff",
+        "teal":       "#2bb6a3"
+      },
+      "light": {
+        "bg":         "#fff7f0",
+        "surface":    "#ffffff",
+        "surface-2":  "#fff1e7",
+        "text":       "#3a2417",
+        "text-soft":  "#7a6253",
+        "border":     "#f0ddcd",
+        "chip-bg":    "#fff1e7"
+      },
+      "dark": {
+        "bg":         "#1a1411",
+        "surface":    "#241b16",
+        "surface-2":  "#2e231c",
+        "text":       "#f6e9df",
+        "text-soft":  "#b69e8c",
+        "border":     "#3a2c23",
+        "chip-bg":    "#2e231c"
+      }
+    },
+
+    "citrus": {
+      "label": "Citrus (orange & lime)",
+      "brand": {
+        "coral":      "#ff8c42",
+        "coral-deep": "#e8590c",
+        "amber":      "#ffd23f",
+        "rose":       "#ff5d73",
+        "plum":       "#9b5de5",
+        "teal":       "#2ec4b6"
+      },
+      "light": {
+        "bg":         "#fff8ec",
+        "surface":    "#ffffff",
+        "surface-2":  "#fff2d8",
+        "text":       "#3b2007",
+        "text-soft":  "#7a5828",
+        "border":     "#f0d898",
+        "chip-bg":    "#fff2d8"
+      },
+      "dark": {
+        "bg":         "#181208",
+        "surface":    "#221a0a",
+        "surface-2":  "#2e2210",
+        "text":       "#fde8c0",
+        "text-soft":  "#b89050",
+        "border":     "#3c2e10",
+        "chip-bg":    "#2e2210"
+      }
+    },
+
+    "berry": {
+      "label": "Berry (warm pink & purple)",
+      "brand": {
+        "coral":      "#ff6b6b",
+        "coral-deep": "#e63946",
+        "amber":      "#ffb703",
+        "rose":       "#ef476f",
+        "plum":       "#9d4edd",
+        "teal":       "#06d6a0"
+      },
+      "light": {
+        "bg":         "#fff0f5",
+        "surface":    "#ffffff",
+        "surface-2":  "#ffe5ee",
+        "text":       "#3a0f25",
+        "text-soft":  "#7a3560",
+        "border":     "#f0bad0",
+        "chip-bg":    "#ffe5ee"
+      },
+      "dark": {
+        "bg":         "#1a0912",
+        "surface":    "#240f1c",
+        "surface-2":  "#2e1828",
+        "text":       "#fcd8e8",
+        "text-soft":  "#c06090",
+        "border":     "#3c1530",
+        "chip-bg":    "#2e1828"
+      }
+    },
+
+    "ember": {
+      "label": "Ember (deep cozy reds)",
+      "brand": {
+        "coral":      "#f4845f",
+        "coral-deep": "#c1351d",
+        "amber":      "#f6bd60",
+        "rose":       "#e5566d",
+        "plum":       "#8367c7",
+        "teal":       "#39a0a0"
+      },
+      "light": {
+        "bg":         "#fff5ef",
+        "surface":    "#ffffff",
+        "surface-2":  "#ffede3",
+        "text":       "#3a0e05",
+        "text-soft":  "#7a3520",
+        "border":     "#f0bba8",
+        "chip-bg":    "#ffede3"
+      },
+      "dark": {
+        "bg":         "#190d08",
+        "surface":    "#231410",
+        "surface-2":  "#2d1c16",
+        "text":       "#fdddd0",
+        "text-soft":  "#b86050",
+        "border":     "#3d1e15",
+        "chip-bg":    "#2d1c16"
+      }
+    },
+
+    "ocean": {
+      "label": "Ocean (cool blues)",
+      "brand": {
+        "coral":      "#4ea8de",
+        "coral-deep": "#2c7da0",
+        "amber":      "#ffca3a",
+        "rose":       "#ff6b6b",
+        "plum":       "#5e60ce",
+        "teal":       "#56cfe1"
+      },
+      "light": {
+        "bg":         "#f3f9ff",
+        "surface":    "#ffffff",
+        "surface-2":  "#e6f2ff",
+        "text":       "#0a1f38",
+        "text-soft":  "#3a6080",
+        "border":     "#b0d4f0",
+        "chip-bg":    "#e6f2ff"
+      },
+      "dark": {
+        "bg":         "#0e1720",
+        "surface":    "#131e2a",
+        "surface-2":  "#192838",
+        "text":       "#d5eaff",
+        "text-soft":  "#5a8aaa",
+        "border":     "#1c3050",
+        "chip-bg":    "#192838"
+      }
+    },
+
+    "forest": {
+      "label": "Forest (earthy greens)",
+      "brand": {
+        "coral":      "#e07a5f",
+        "coral-deep": "#bc5a3c",
+        "amber":      "#f2cc8f",
+        "rose":       "#e76f51",
+        "plum":       "#81b29a",
+        "teal":       "#3d8361"
+      },
+      "light": {
+        "bg":         "#f5f7ef",
+        "surface":    "#ffffff",
+        "surface-2":  "#eaedde",
+        "text":       "#1a2810",
+        "text-soft":  "#456030",
+        "border":     "#c0caa0",
+        "chip-bg":    "#eaedde"
+      },
+      "dark": {
+        "bg":         "#131a12",
+        "surface":    "#1a2218",
+        "surface-2":  "#212c20",
+        "text":       "#d5eacc",
+        "text-soft":  "#68a055",
+        "border":     "#283820",
+        "chip-bg":    "#212c20"
+      }
+    }
+  }
+}

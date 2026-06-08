@@ -1,0 +1,17 @@
+{
+  "name": "CityChilly",
+  "short_name": "CityChilly",
+  "description": "Discover activities and outdoor events for any city.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff7f0",
+  "theme_color": "#ff7a59",
+  "icons": [
+    {
+      "src": "/assets/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
