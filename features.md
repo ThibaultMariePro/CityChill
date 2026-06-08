@@ -5,3 +5,4 @@
 - Add the possibility to export the agenda. On the Agenda page, add some export options. 
 
 - add a clickable option to reveal a quick description of the event on cards
+

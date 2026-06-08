@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -10,6 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
+from app.api_keys import API_KEY_SPECS
 from app.cache import TTLCache
 from app.categories import CATEGORIES
 from app.config import settings
@@ -36,6 +38,14 @@ app.add_middleware(
 cache = TTLCache(settings.CACHE_TTL_SECONDS)
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+
+
+def _openagenda_cache_tag(openagenda_key: str | None) -> str:
+    """Short cache suffix so discover results differ when the OA key changes."""
+    key = (openagenda_key or "").strip() or (settings.OPENAGENDA_KEY or "")
+    if not key:
+        return "oa-none"
+    return "oa-" + hashlib.sha256(key.encode()).hexdigest()[:10]
 
 
 def _attach_weather(items: list[Item], weather) -> None:
@@ -108,6 +118,22 @@ async def theme_info() -> dict:
     }
 
 
+@app.get("/api/keys")
+async def api_keys() -> dict:
+    """Describe optional API keys and whether the server has them via env vars."""
+    return {
+        "keys": [
+            {
+                **spec,
+                "server_configured": bool(settings.OPENAGENDA_KEY)
+                if spec["id"] == "openagenda_key"
+                else False,
+            }
+            for spec in API_KEY_SPECS
+        ]
+    }
+
+
 @app.get("/api/categories")
 async def categories() -> dict:
     return {
@@ -125,11 +151,14 @@ async def discover(
     lat: float | None = Query(default=None, ge=-90.0, le=90.0),
     lon: float | None = Query(default=None, ge=-180.0, le=180.0),
     place_name: str | None = Query(default=None, max_length=200),
+    openagenda_key: str | None = Query(default=None, max_length=200),
 ) -> DiscoverResponse:
+    oa_tag = _openagenda_cache_tag(openagenda_key)
+
     # ── Coordinate-based path (skips geocoding, used by pinned locations) ──
     if lat is not None and lon is not None:
         display = place_name or f"{lat:.3f}, {lon:.3f}"
-        cache_key = f"discover::coords::{_make_pin_id(lat, lon)}"
+        cache_key = f"discover::coords::{_make_pin_id(lat, lon)}::{oa_tag}"
         cached = cache.get(cache_key)
         if cached:
             return cached
@@ -144,7 +173,8 @@ async def discover(
     else:
         effective_city = (city or "").strip() or settings.DEFAULT_CITY
         cache_key = (
-            f"discover::{effective_city.lower()}::{(country or '').lower().strip()}"
+            f"discover::{effective_city.lower()}::"
+            f"{(country or '').lower().strip()}::{oa_tag}"
         )
         cached = cache.get(cache_key)
         if cached:
@@ -161,7 +191,7 @@ async def discover(
     weather, activities_result, events_result = await asyncio.gather(
         get_weather(place.latitude, place.longitude),
         get_activities(place),
-        get_events(place),
+        get_events(place, openagenda_key=openagenda_key),
         return_exceptions=True,
     )
 

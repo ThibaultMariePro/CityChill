@@ -11,6 +11,7 @@
     pins:      "citychilly:pins",       // new multi-pin storage
     favorites: "citychilly:favorites",
     agenda:    "citychilly:agenda",
+    params:    "citychilly:params",
   };
 
   /* ── state ───────────────────────────────────────────────────────────── */
@@ -22,6 +23,7 @@
     categories: [],
     filters: { category: "all", kind: "all", outdoorOnly: false },
     tab: "discover",
+    keySpecs: [],
   };
 
   // Autocomplete state
@@ -668,10 +670,98 @@
     });
   }
 
+  /* ── parameters / API keys ───────────────────────────────────────────── */
+  function readParams() {
+    try {
+      const raw = localStorage.getItem(LS.params);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  }
+
+  function saveParams(values) {
+    localStorage.setItem(LS.params, JSON.stringify(values));
+  }
+
+  function appendApiKeysToSearchParams(sp) {
+    const params = readParams();
+    if (params.openagenda_key?.trim()) {
+      sp.set("openagenda_key", params.openagenda_key.trim());
+    }
+    return sp;
+  }
+
+  async function loadKeySpecs() {
+    if (state.keySpecs.length) return;
+    try {
+      const res = await fetch(`${API}/api/keys`);
+      if (!res.ok) return;
+      const data = await res.json();
+      state.keySpecs = data.keys || [];
+    } catch { /* offline or API unavailable */ }
+  }
+
+  function renderParameters() {
+    const container = $("#params-fields");
+    const note = $("#params-note");
+    if (!container) return;
+
+    const saved = readParams();
+    container.innerHTML = "";
+
+    if (!state.keySpecs.length) {
+      container.innerHTML = `<p class="params__note">Could not load API key settings. Check your connection and try again.</p>`;
+      return;
+    }
+
+    state.keySpecs.forEach((spec) => {
+      const field = el("div", "param-field");
+      const badge = spec.server_configured
+        ? `<span class="param-field__badge">Server configured</span>`
+        : "";
+      field.innerHTML = `
+        <div class="param-field__head">
+          <label class="param-field__label" for="param-${esc(spec.id)}">${esc(spec.label)}</label>
+          ${badge}
+        </div>
+        <p class="param-field__desc">
+          ${esc(spec.description)}
+          ${spec.signup_url ? ` <a href="${esc(spec.signup_url)}" target="_blank" rel="noopener">Get a free key ↗</a>` : ""}
+        </p>
+        <input
+          class="param-field__input"
+          id="param-${esc(spec.id)}"
+          name="${esc(spec.id)}"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="${spec.server_configured ? "Leave empty to use server key" : "Paste your API key"}"
+          value="${esc(saved[spec.id] || "")}"
+        />
+        <p class="param-field__meta">Env var: <code>${esc(spec.env_var || spec.id)}</code></p>`;
+      container.appendChild(field);
+    });
+
+    if (note) {
+      note.textContent =
+        "Keys are saved in this browser only and sent with discover requests. " +
+        "A server-side key (Docker/env) is used when the field is left empty.";
+    }
+  }
+
+  function collectParamsFromForm() {
+    const values = {};
+    state.keySpecs.forEach((spec) => {
+      const input = document.getElementById(`param-${spec.id}`);
+      if (input) values[spec.id] = input.value.trim();
+    });
+    return values;
+  }
+
   function renderActivePanel() {
-    if (state.tab === "discover")  renderDiscover();
+    if (state.tab === "discover") renderDiscover();
     else if (state.tab === "favorites") renderFavorites();
-    else if (state.tab === "agenda")    renderAgenda();
+    else if (state.tab === "agenda") renderAgenda();
+    else if (state.tab === "parameters") renderParameters();
   }
 
   /* ── chips ───────────────────────────────────────────────────────────── */

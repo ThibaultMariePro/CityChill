@@ -70,6 +70,7 @@
       <button class="tab is-active" data-tab="discover" role="tab">🧭 Discover</button>
       <button class="tab" data-tab="agenda" role="tab">🗓️ My Agenda <span class="tab__count" id="agenda-count">0</span></button>
       <button class="tab" data-tab="favorites" role="tab">❤️ Favorites <span class="tab__count" id="fav-count">0</span></button>
+      <button class="tab" data-tab="parameters" role="tab">⚙️ Parameters</button>
     </nav>
 
     <!-- Discover -->
@@ -115,6 +116,22 @@
         <h3>Your agenda is empty</h3>
         <p>Add events and activities from the Discover tab to build your roadmap.</p>
       </div>
+    </section>
+
+    <!-- Parameters -->
+    <section class="panel" id="panel-parameters" role="tabpanel">
+      <div class="panel__head">
+        <h2>Parameters</h2>
+        <p class="panel__hint">Optional API keys stored on this device. Used when fetching live data.</p>
+      </div>
+      <form id="params-form" class="params" autocomplete="off">
+        <div id="params-fields" class="params__fields"></div>
+        <div class="params__actions">
+          <button type="submit" class="btn btn--primary">Save &amp; refresh</button>
+          <button type="button" class="btn btn--ghost" id="params-clear">Clear keys</button>
+        </div>
+        <p class="params__note" id="params-note"></p>
+      </form>
     </section>
 
     <!-- Favorites -->

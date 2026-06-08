@@ -110,10 +110,10 @@ def _guess_category(keywords: list[str]) -> str:
     return "culture"
 
 
-async def _openagenda_events(place: Place) -> list[Item]:
-    if not settings.OPENAGENDA_KEY:
+async def _openagenda_events(place: Place, *, openagenda_key: str | None = None) -> list[Item]:
+    key = (openagenda_key or "").strip() or settings.OPENAGENDA_KEY
+    if not key:
         return []
-    key = settings.OPENAGENDA_KEY
     try:
         async with build_client() as client:
             # 1. Find an agenda matching the city.
@@ -201,26 +201,32 @@ def _pick_lang(value, prefer=("en", "fr")):
     return None
 
 
-async def get_events(place: Place) -> tuple[list[Item], list[str]]:
+def _has_openagenda_key(openagenda_key: str | None = None) -> bool:
+    return bool((openagenda_key or "").strip() or settings.OPENAGENDA_KEY)
+
+
+async def get_events(
+    place: Place, *, openagenda_key: str | None = None
+) -> tuple[list[Item], list[str]]:
     """Return (events, notices)."""
     notices: list[str] = []
 
-    live = await _openagenda_events(place)
+    live = await _openagenda_events(place, openagenda_key=openagenda_key)
     if live:
         return live, notices
 
     curated = _curated_events(place)
     if curated:
-        if not settings.OPENAGENDA_KEY:
+        if not _has_openagenda_key(openagenda_key):
             notices.append(
                 "Showing CityChilly's curated highlights for this city. "
-                "Set an OPENAGENDA_KEY to pull live events anywhere."
+                "Add an OpenAgenda key in Parameters to pull live events anywhere."
             )
         return curated, notices
 
     notices.append(
         f"No curated event feed for {place.name} yet \u2014 explore the live "
-        "Activities below (from OpenStreetMap), or set an OPENAGENDA_KEY for "
-        "live events in any city."
+        "Activities below (from OpenStreetMap), or add an OpenAgenda key in "
+        "Parameters for live events in any city."
     )
     return [], notices
