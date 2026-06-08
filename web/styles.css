@@ -316,16 +316,19 @@ a { color: inherit; }
 }
 @keyframes pulse { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
 
-.pin-chip__name { font-weight: 700; font-variant-numeric: tabular-nums; }
+.pin-chip__name { font-weight: 600; font-size: .82rem; }
 .pin-chip__sub {
   font-size: .7rem;
   color: var(--text-soft);
   font-weight: 500;
 }
 .pin-chip__code {
-  font-size: .7rem;
+  font-size: .68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--text-soft);
   background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 1px 5px;
 }
@@ -396,6 +399,12 @@ a { color: inherit; }
   margin: 4px 0 2px; line-height: 1.05; font-weight: 700;
 }
 .hero__subtitle { margin: 0; color: var(--text-soft); font-size: 1.05rem; }
+.hero__subtitle--codes {
+  font-size: .78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+}
 
 .hero__weather {
   display: flex; gap: 8px; overflow-x: auto; padding: 6px 2px;

@@ -181,23 +181,27 @@
     if (!state.pins.length) return;
     const eyebrow = $("#place-eyebrow");
     const codes = state.pins.map((p) => p.postcode).filter(Boolean);
+    const placeSub = $("#place-sub");
     if (codes.length) {
-      $("#place-name").textContent = codes.join(" · ");
       const places = [...new Set(state.pins.map((p) => p.name).filter(Boolean))];
-      $("#place-sub").textContent = places.join(" · ");
+      $("#place-name").textContent = places.join(" · ");
+      placeSub.textContent = codes.join(" · ");
+      placeSub.classList.add("hero__subtitle--codes");
       if (eyebrow) eyebrow.textContent = "Postal codes in scope";
     } else if (state.pins.length === 1) {
       const pin = state.pins[0];
       const place = state.pinData[pin.id]?.place;
       $("#place-name").textContent = place?.name || pin.name;
-      $("#place-sub").textContent  = place
+      placeSub.textContent = place
         ? [place.admin, place.country].filter(Boolean).join(", ")
         : (pin.display || "");
+      placeSub.classList.remove("hero__subtitle--codes");
       if (eyebrow) eyebrow.textContent = "Now exploring";
     } else {
       const names = state.pins.map((p) => state.pinData[p.id]?.place?.name || p.name);
       $("#place-name").textContent = `${state.pins.length} locations`;
-      $("#place-sub").textContent  = names.join(" · ");
+      placeSub.textContent = names.join(" · ");
+      placeSub.classList.remove("hero__subtitle--codes");
       if (eyebrow) eyebrow.textContent = "Now exploring";
     }
   }
@@ -352,7 +356,9 @@
     const eyebrow = $("#place-eyebrow");
     if (eyebrow) eyebrow.textContent = "Now exploring";
     $("#place-name").textContent = "Pick a location";
-    $("#place-sub").textContent = "Search a city or postal code above";
+    const placeSub = $("#place-sub");
+    placeSub.textContent = "Search a city or postal code above";
+    placeSub.classList.remove("hero__subtitle--codes");
     $("#weather-strip").innerHTML = "";
     $("#notices").innerHTML = "";
     $("#notices").hidden = true;
@@ -799,14 +805,15 @@
 
     state.pins.forEach((pin) => {
       const loaded = Boolean(state.pinData[pin.id]);
-      const label  = pinLabel(pin);
-      const sub    = pin.postcode ? pinSubtitle(pin) : "";
+      const city   = pin.postcode ? pinSubtitle(pin) : pinLabel(pin);
+      const code   = pin.postcode || "";
+      const removeLabel = code ? `${city} (${code})` : city;
       const chip = el("div", `pin-chip${!loaded ? " is-loading" : ""}`, "");
       chip.innerHTML = `
         <span class="pin-chip__dot${!loaded ? " is-loading" : ""}"></span>
-        <span class="pin-chip__name">${esc(label)}</span>
-        ${sub && sub !== label ? `<span class="pin-chip__sub">${esc(sub)}</span>` : ""}
-        <button class="pin-chip__remove" type="button" title="Remove ${esc(label)}" aria-label="Remove ${esc(label)}">×</button>`;
+        <span class="pin-chip__name">${esc(city)}</span>
+        ${code ? `<span class="pin-chip__code">${esc(code)}</span>` : ""}
+        <button class="pin-chip__remove" type="button" title="Remove ${esc(removeLabel)}" aria-label="Remove ${esc(removeLabel)}">×</button>`;
       chip.querySelector(".pin-chip__remove").addEventListener("click", () => removePin(pin.id));
       container.appendChild(chip);
     });
