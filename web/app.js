@@ -988,8 +988,12 @@
 
   async function fetchDiscoverForPin(pin) {
     const placeName = pin.postcode ? `${pin.postcode} · ${pin.name}` : pin.name;
-    const url = `${API}/api/discover?lat=${pin.latitude}&lon=${pin.longitude}&place_name=${encodeURIComponent(placeName)}`;
-    const res = await fetch(url);
+    const sp = appendApiKeysToSearchParams(new URLSearchParams({
+      lat: String(pin.latitude),
+      lon: String(pin.longitude),
+      place_name: placeName,
+    }));
+    const res = await fetch(`${API}/api/discover?${sp}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "Could not load this location.");
@@ -1084,7 +1088,8 @@
       () => showLoading(true, `Finding cool things to do in ${city}…`), 220
     );
     try {
-      const res = await fetch(`${API}/api/discover?city=${encodeURIComponent(city)}`);
+      const sp = appendApiKeysToSearchParams(new URLSearchParams({ city }));
+      const res = await fetch(`${API}/api/discover?${sp}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || "Could not load this city.");
@@ -1256,6 +1261,26 @@
       downloadFile(`citychilly-agenda-${stamp}.json`, buildAgendaJSON(), "application/json;charset=utf-8");
       toast("JSON file downloaded");
     });
+
+    $("#params-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      saveParams(collectParamsFromForm());
+      toast("Parameters saved");
+      if (state.pins.length) {
+        await reloadSelection();
+        setTab("discover");
+      }
+    });
+
+    $("#params-clear").addEventListener("click", async () => {
+      saveParams({});
+      state.keySpecs.forEach((spec) => {
+        const input = document.getElementById(`param-${spec.id}`);
+        if (input) input.value = "";
+      });
+      toast("API keys cleared");
+      if (state.pins.length) await reloadSelection();
+    });
   }
 
   /* ── init ────────────────────────────────────────────────────────────── */
@@ -1276,6 +1301,7 @@
     refreshCounts();
     updateAgendaExportBar();
     loadCategories();
+    loadKeySpecs().then(() => renderParameters());
 
     // Restore pinned locations (new format) or fall back to legacy lastCity
     const savedPins = readPins();
