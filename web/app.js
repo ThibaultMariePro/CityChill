@@ -28,6 +28,7 @@
   let acTimer      = null;
   let acFocused    = -1;
   let acController = null;
+  let loadGeneration = 0;
 
   /* ── tiny helpers ────────────────────────────────────────────────────── */
   const $ = (sel) => document.querySelector(sel);
@@ -136,23 +137,25 @@
 
   /* ── hero ─────────────────────────────────────────────────────────────── */
   function renderHero() {
-    const loaded = state.pins.filter((p) => state.pinData[p.id]);
-    if (!loaded.length) return;
+    if (!state.pins.length) return;
     const eyebrow = $("#place-eyebrow");
-    const codes = loaded.map((p) => p.postcode).filter(Boolean);
+    const codes = state.pins.map((p) => p.postcode).filter(Boolean);
     if (codes.length) {
       $("#place-name").textContent = codes.join(" · ");
-      const places = [...new Set(loaded.map((p) => p.name).filter(Boolean))];
+      const places = [...new Set(state.pins.map((p) => p.name).filter(Boolean))];
       $("#place-sub").textContent = places.join(" · ");
       if (eyebrow) eyebrow.textContent = "Postal codes in scope";
-    } else if (loaded.length === 1) {
-      const place = state.pinData[loaded[0].id].place;
-      $("#place-name").textContent = place.name;
-      $("#place-sub").textContent  = [place.admin, place.country].filter(Boolean).join(", ");
+    } else if (state.pins.length === 1) {
+      const pin = state.pins[0];
+      const place = state.pinData[pin.id]?.place;
+      $("#place-name").textContent = place?.name || pin.name;
+      $("#place-sub").textContent  = place
+        ? [place.admin, place.country].filter(Boolean).join(", ")
+        : (pin.display || "");
       if (eyebrow) eyebrow.textContent = "Now exploring";
     } else {
-      const names = loaded.map((p) => state.pinData[p.id].place.name);
-      $("#place-name").textContent = `${loaded.length} locations`;
+      const names = state.pins.map((p) => state.pinData[p.id]?.place?.name || p.name);
+      $("#place-name").textContent = `${state.pins.length} locations`;
       $("#place-sub").textContent  = names.join(" · ");
       if (eyebrow) eyebrow.textContent = "Now exploring";
     }
@@ -264,10 +267,34 @@
   }
 
   /* ── items merging ───────────────────────────────────────────────────── */
+  function prunePinData() {
+    const active = new Set(state.pins.map((p) => p.id));
+    for (const id of Object.keys(state.pinData)) {
+      if (!active.has(id)) delete state.pinData[id];
+    }
+  }
+
+  function clearResults() {
+    const eyebrow = $("#place-eyebrow");
+    if (eyebrow) eyebrow.textContent = "Now exploring";
+    $("#place-name").textContent = "Pick a location";
+    $("#place-sub").textContent = "Search a city or postal code above";
+    $("#weather-strip").innerHTML = "";
+    $("#notices").innerHTML = "";
+    $("#notices").hidden = true;
+    $("#discover-grid").innerHTML = "";
+    const empty = $("#discover-empty");
+    empty.hidden = false;
+    empty.innerHTML = `<div class="empty__emoji">📍</div><h3>No postal codes selected</h3><p>Pin one or more postal codes to explore activities and events.</p>`;
+    $("#results-meta").textContent = "0 results";
+  }
+
   function allItems() {
     const seen  = new Set();
     const items = [];
+    const activeIds = new Set(state.pins.map((p) => p.id));
     for (const pin of state.pins) {
+      if (!activeIds.has(pin.id)) continue;
       const data = state.pinData[pin.id];
       if (!data) continue;
       for (const item of [...(data.events ?? []), ...(data.activities ?? [])]) {
@@ -294,12 +321,12 @@
     grid.innerHTML = "";
     const items   = filteredItems();
     const loaded  = state.pins.filter((p) => state.pinData[p.id]);
-    const codes = loaded.map((p) => p.postcode).filter(Boolean);
+    const codes = state.pins.map((p) => p.postcode).filter(Boolean);
     const locText = codes.length
       ? codes.join(", ")
       : loaded.length > 1
         ? `${loaded.length} locations`
-        : (loaded[0] ? state.pinData[loaded[0].id].place.name : "your city");
+        : (loaded[0] ? (state.pinData[loaded[0].id]?.place?.name || loaded[0].name) : "your city");
 
     meta.textContent = `${items.length} result${items.length === 1 ? "" : "s"} in ${locText}`;
 
@@ -447,10 +474,10 @@
       return;
     }
     state.pins.push(pin);
-    renderPinnedChips();
     closeDropdown();
     $("#city-input").value = "";
-    loadPlace(pin);
+    setTab("discover");
+    reloadSelection();
   }
 
   async function addPinFromPostcode(code, parent) {
@@ -475,9 +502,8 @@
         pin.display = `${pin.postcode} · ${parent.name}`;
       }
       state.pins.push(pin);
-      savePins();
-      renderPinnedChips();
-      await loadPlace(pin);
+      setTab("discover");
+      await reloadSelection();
       toast(`Pinned ${clean}`);
       // Keep dropdown open so user can pin more codes from the same city.
       const query = $("#city-input").value.trim();
@@ -492,12 +518,7 @@
     if (idx === -1) return;
     state.pins.splice(idx, 1);
     delete state.pinData[id];
-    savePins();
-    renderPinnedChips();
-    renderHero();
-    renderWeather();
-    renderNotices();
-    renderActivePanel();
+    reloadSelection();
   }
 
   /* ── autocomplete ────────────────────────────────────────────────────── */
@@ -610,37 +631,95 @@
     renderChips();
   }
 
-  /** Load discover data for a pin that already has lat/lon (skips server geocoding). */
-  async function loadPlace(pin) {
-    const alreadyHasData = state.pins.some((p) => p.id !== pin.id && state.pinData[p.id]);
-    const loadingTimer = alreadyHasData
-      ? null
-      : setTimeout(() => showLoading(true, `Finding cool things to do in ${pin.name}…`), 220);
+  async function fetchDiscoverForPin(pin) {
+    const placeName = pin.postcode ? `${pin.postcode} · ${pin.name}` : pin.name;
+    const url = `${API}/api/discover?lat=${pin.latitude}&lon=${pin.longitude}&place_name=${encodeURIComponent(placeName)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Could not load this location.");
+    }
+    return res.json();
+  }
+
+  /** Re-fetch discover data for every pinned location and rebuild the UI. */
+  async function reloadSelection() {
+    const gen = ++loadGeneration;
+    prunePinData();
+    savePins();
+    renderPinnedChips();
+
+    if (!state.pins.length) {
+      clearResults();
+      return;
+    }
+
+    renderHero();
+
+    // Drop cached results immediately so cards from a previous selection never linger.
+    state.pinData = {};
+    renderWeather();
+    renderNotices();
+    renderActivePanel();
+
+    const loadingTimer = setTimeout(() => showLoading(true, "Updating results…"), 220);
 
     try {
-      const placeName = pin.postcode
-        ? `${pin.postcode} · ${pin.name}`
-        : pin.name;
-      const url = `${API}/api/discover?lat=${pin.latitude}&lon=${pin.longitude}&place_name=${encodeURIComponent(placeName)}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Could not load this location.");
+      const results = await Promise.all(
+        state.pins.map(async (pin) => {
+          try {
+            const data = await fetchDiscoverForPin(pin);
+            return { pin, data, error: null };
+          } catch (error) {
+            return { pin, data: null, error };
+          }
+        })
+      );
+
+      if (gen !== loadGeneration) return;
+
+      // Rebuild pinData from scratch so removed pins never leave stale cards.
+      const nextData = {};
+      const failed = [];
+
+      for (const { pin, data, error } of results) {
+        if (!state.pins.some((p) => p.id === pin.id)) continue;
+        if (error || !data) {
+          failed.push(pin);
+          continue;
+        }
+        nextData[pin.id] = data;
       }
-      const data = await res.json();
-      state.pinData[pin.id] = data;
-      savePins();
+
+      state.pinData = nextData;
+
+      if (failed.length) {
+        failed.forEach((pin) => {
+          const idx = state.pins.findIndex((p) => p.id === pin.id);
+          if (idx !== -1) state.pins.splice(idx, 1);
+          toast(`Could not load ${pinLabel(pin)}`);
+        });
+        prunePinData();
+        savePins();
+      }
+
+      if (gen !== loadGeneration) return;
+
+      if (!state.pins.length) {
+        clearResults();
+        return;
+      }
+
       renderPinnedChips();
       renderHero();
       renderWeather();
       renderNotices();
       renderActivePanel();
-    } catch (e) {
-      toast(e.message || "Something went wrong");
-      removePin(pin.id);
     } finally {
-      if (loadingTimer) clearTimeout(loadingTimer);
-      showLoading(false);
+      if (gen === loadGeneration) {
+        clearTimeout(loadingTimer);
+        showLoading(false);
+      }
     }
   }
 
@@ -666,14 +745,8 @@
         postcodes: [],
       };
 
-      // Replace pins only if nothing is loaded yet (avoids clobbering multi-pins)
-      if (!state.pins.some((p) => state.pinData[p.id])) {
-        state.pins = [pin];
-      } else if (!state.pins.some((p) => p.id === pin.id)) {
-        state.pins.unshift(pin);
-      }
-
-      state.pinData[pin.id] = data;
+      state.pins = [pin];
+      state.pinData = { [pin.id]: data };
       savePins();
       renderPinnedChips();
       renderHero();
@@ -730,10 +803,16 @@
       const focusedBtn = $("#autocomplete-list .ac-item.is-focused .ac-item__code-btn:not(:disabled), #autocomplete-list .ac-item.is-focused .ac-item__pin:not(:disabled)");
       if (focusedBtn) { focusedBtn.click(); return; }
 
-      // Direct postal-code entry
+      // Direct postal-code entry replaces the current selection
       if (looksLikePostcode(query)) {
         setTab("discover");
         closeDropdown();
+        if (isPostcodePinned(query)) {
+          toast(`${query} is already pinned`);
+          return;
+        }
+        state.pins = [];
+        state.pinData = {};
         await addPinFromPostcode(query);
         return;
       }
@@ -822,9 +901,8 @@
     const savedPins = readPins();
     if (savedPins) {
       state.pins = savedPins;
-      renderPinnedChips();
-      renderHero();
-      savedPins.forEach((pin) => loadPlace(pin));
+      state.pinData = {};
+      reloadSelection();
     } else {
       const lastCity = readString(LS.city) || "Nantes";
       $("#city-input").value = lastCity;
