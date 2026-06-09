@@ -3,6 +3,8 @@ services:
     build: .
     image: citychilly:latest
     container_name: citychilly
+    env_file:
+      - .env
     ports:
       - "${CITYCHILLY_PORT:-8000}:8000"
     environment:
