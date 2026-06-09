@@ -39,7 +39,7 @@
     pinData: {},   // id → DiscoverResponse (place, weather, activities, events, notices)
     // UI
     categories: [],
-    filters: { category: "all", kind: "all", outdoorOnly: false },
+    filters: { category: "all", kind: "all", outdoorOnly: false, eventPeriod: "all" },
     tab: "discover",
     keySpecs: [],
     themePalettes: [],
@@ -147,6 +147,61 @@
     if (!start) return t("card.anytime");
     if (!end || end === start) return fmtDay(start);
     return `${fmtDay(start)} – ${fmtDay(end)}`;
+  };
+
+  const parseISODate = (iso) => {
+    const [y, m, d] = String(iso).split("T")[0].split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  const startOfWeek = (ref = new Date()) => {
+    const date = new Date(ref);
+    const day = date.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    date.setDate(date.getDate() + diff);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
+  const endOfWeek = (ref = new Date()) => {
+    const end = startOfWeek(ref);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return end;
+  };
+
+  const startOfMonth = (ref = new Date()) =>
+    new Date(ref.getFullYear(), ref.getMonth(), 1);
+
+  const endOfMonth = (ref = new Date()) =>
+    new Date(ref.getFullYear(), ref.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  const eventPeriodBounds = (period) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (period === "week") {
+      return { start: startOfWeek(today), end: endOfWeek(today) };
+    }
+    if (period === "month") {
+      return { start: startOfMonth(today), end: endOfMonth(today) };
+    }
+    if (period === "quarter") {
+      const end = new Date(today);
+      end.setMonth(end.getMonth() + 3);
+      end.setHours(23, 59, 59, 999);
+      return { start: today, end };
+    }
+    return null;
+  };
+
+  const eventMatchesPeriod = (item, period) => {
+    if (period === "all" || item.kind !== "event") return true;
+    if (!item.start) return false;
+    const bounds = eventPeriodBounds(period);
+    if (!bounds) return true;
+    const evStart = parseISODate(item.start);
+    const evEnd = parseISODate(item.end || item.start);
+    return evStart <= bounds.end && evEnd >= bounds.start;
   };
 
   const wxLevel = (score) => (score >= 70 ? "good" : score >= 45 ? "ok" : "bad");
@@ -480,11 +535,14 @@
   }
 
   function filteredItems() {
-    const { category, kind, outdoorOnly } = state.filters;
+    const { category, kind, outdoorOnly, eventPeriod } = state.filters;
     let items = allItems();
     if (kind !== "all")     items = items.filter((it) => it.kind === kind);
     if (category !== "all") items = items.filter((it) => it.category === category);
     if (outdoorOnly)        items = items.filter((it) => it.is_outdoor);
+    if (eventPeriod !== "all") {
+      items = items.filter((it) => eventMatchesPeriod(it, eventPeriod));
+    }
     return items;
   }
 
@@ -883,6 +941,7 @@
     if (save) localStorage.setItem(LS.lang, lang);
     renderLanguagePicker();
     I18N.applyStatic();
+    renderTimeFilter();
     loadCategories().then(() => {
       renderChips();
       renderHero();
@@ -1045,6 +1104,58 @@
     state.filters.category = id;
     renderChips();
     renderDiscover();
+  }
+
+  const TIME_PERIOD_LABELS = {
+    all: "filter.time.all",
+    week: "filter.time.week",
+    month: "filter.time.month",
+    quarter: "filter.time.quarter",
+  };
+
+  function renderTimeFilter() {
+    const label = $("#time-filter-label");
+    const btn = $("#time-filter-btn");
+    const period = state.filters.eventPeriod;
+    if (label) {
+      label.textContent = t(TIME_PERIOD_LABELS[period] || TIME_PERIOD_LABELS.all);
+    }
+    if (btn) {
+      const disabled = state.filters.kind === "activity";
+      btn.disabled = disabled;
+      btn.classList.toggle("is-disabled", disabled);
+      btn.setAttribute("aria-disabled", disabled ? "true" : "false");
+    }
+    $$("#time-filter-menu .time-filter__option").forEach((opt) => {
+      opt.classList.toggle("is-active", opt.dataset.period === period);
+      opt.setAttribute("aria-selected", opt.dataset.period === period ? "true" : "false");
+    });
+  }
+
+  function setEventPeriod(period) {
+    if (!TIME_PERIOD_LABELS[period]) return;
+    state.filters.eventPeriod = period;
+    closeTimeFilterMenu();
+    renderTimeFilter();
+    renderDiscover();
+  }
+
+  function closeTimeFilterMenu() {
+    const menu = $("#time-filter-menu");
+    const btn = $("#time-filter-btn");
+    if (!menu || !btn) return;
+    menu.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleTimeFilterMenu() {
+    if (state.filters.kind === "activity") return;
+    const menu = $("#time-filter-menu");
+    const btn = $("#time-filter-btn");
+    if (!menu || !btn) return;
+    const open = menu.hidden;
+    menu.hidden = !open;
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
   /* ── pinned chips ────────────────────────────────────────────────────── */
@@ -1625,9 +1736,27 @@
       b.addEventListener("click", () => {
         state.filters.kind = b.dataset.kind;
         $$("#kind-filter .seg").forEach((s) => s.classList.toggle("is-active", s === b));
+        renderTimeFilter();
         renderDiscover();
       })
     );
+
+    $("#time-filter-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleTimeFilterMenu();
+    });
+
+    $$("#time-filter-menu .time-filter__option").forEach((opt) => {
+      opt.addEventListener("click", () => setEventPeriod(opt.dataset.period));
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest("#time-filter")) closeTimeFilterMenu();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeTimeFilterMenu();
+    });
 
     $("#outdoor-only").addEventListener("change", (e) => {
       state.filters.outdoorOnly = e.target.checked;
@@ -1719,6 +1848,7 @@
     applyTheme(theme);
 
     wire();
+    renderTimeFilter();
     refreshCounts();
     updateAgendaExportBar();
     loadCategories();

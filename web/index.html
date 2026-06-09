@@ -81,6 +81,36 @@
             <button class="seg" data-kind="event" data-i18n="filter.kind.event">Events</button>
             <button class="seg" data-kind="activity" data-i18n="filter.kind.activity">Activities</button>
           </div>
+          <div class="time-filter" id="time-filter">
+            <button
+              type="button"
+              class="time-filter__btn"
+              id="time-filter-btn"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-controls="time-filter-menu"
+              data-i18n-title="filter.time.aria"
+              title="Filter events by period"
+            >
+              <span class="time-filter__icon" aria-hidden="true">🗓️</span>
+              <span id="time-filter-label" data-i18n="filter.time.all">All events</span>
+              <span class="time-filter__chevron" aria-hidden="true">▾</span>
+            </button>
+            <ul class="time-filter__menu" id="time-filter-menu" role="listbox" data-i18n-aria="filter.time.aria" aria-label="Event period" hidden>
+              <li role="presentation">
+                <button type="button" class="time-filter__option is-active" data-period="all" role="option" data-i18n="filter.time.all">All events</button>
+              </li>
+              <li role="presentation">
+                <button type="button" class="time-filter__option" data-period="week" role="option" data-i18n="filter.time.week">This week</button>
+              </li>
+              <li role="presentation">
+                <button type="button" class="time-filter__option" data-period="month" role="option" data-i18n="filter.time.month">This month</button>
+              </li>
+              <li role="presentation">
+                <button type="button" class="time-filter__option" data-period="quarter" role="option" data-i18n="filter.time.quarter">Next 3 months</button>
+              </li>
+            </ul>
+          </div>
           <label class="switch">
             <input type="checkbox" id="outdoor-only" />
             <span class="switch__track"><span class="switch__thumb"></span></span>
