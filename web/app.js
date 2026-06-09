@@ -224,6 +224,13 @@
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts.join(", "))}`;
   }
 
+  /** Web search for the full card title (uses the browser's default search engine when set). */
+  function searchEngineUrl(query) {
+    const q = String(query || "").trim();
+    if (!q) return null;
+    return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+  }
+
   async function copyText(text) {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -480,6 +487,17 @@
       });
 
       utilityRow.append(mapsLink, copyMap);
+    }
+
+    const searchUrl = searchEngineUrl(item.title);
+    if (searchUrl) {
+      const searchLink = el("a", "btn btn--ghost btn--compact");
+      searchLink.href = searchUrl;
+      searchLink.target = "_blank";
+      searchLink.rel = "noopener";
+      searchLink.title = t("card.searchTitle", { title: item.title });
+      searchLink.innerHTML = t("card.search");
+      utilityRow.append(searchLink);
     }
 
     const source = el("a", "btn btn--ghost btn--compact btn--source");
