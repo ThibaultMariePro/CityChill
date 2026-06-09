@@ -38,6 +38,14 @@ class TTLCache:
             self._store.clear()
             return count
 
+    def clear_where(self, predicate: Callable[[str], bool]) -> int:
+        """Drop cache entries whose key matches predicate. Returns count removed."""
+        with self._lock:
+            doomed = [k for k in self._store if predicate(k)]
+            for k in doomed:
+                del self._store[k]
+            return len(doomed)
+
     async def get_or_set(self, key: str, factory: Callable[[], Awaitable[Any]]) -> Any:
         cached = self.get(key)
         if cached is not None:

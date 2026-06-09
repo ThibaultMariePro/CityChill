@@ -14,3 +14,9 @@
 
 - I'd like a visual indicator of the api connection state, implement a visual cue next to CityChilly logo : 🔴 this if the API is not available, 🟢 this if it's reachable. It implies a heltcheck, or a basic request to open agenda, with the configured api key, it must check if the api key is working, not simply open agenda reachable with a general request.
 It'd be interesting if this healtcheck is done every time the user make an action on the main page in the app.
+
+make the app not showing anything about nantes at start, juste a clean screen with no request made.
+
+add a reset button to clear search data, both stored ones, and the last research done by the user
+
+add the today option in the period selection, with the corresponding filter feature

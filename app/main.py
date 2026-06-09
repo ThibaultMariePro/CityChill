@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -30,10 +31,26 @@ from app.providers.geocode import _make_pin_id, geocode_city, search_places
 from app.providers.weather import get_weather
 from app.theme import active_palette, generate_css, list_palettes
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Drop discover rows cached before an OpenAgenda key was configured.
+    if settings.OPENAGENDA_KEY:
+        removed = cache.clear_where(lambda k: "::oa-none::" in k)
+        if removed:
+            import logging
+
+            logging.getLogger("citychilly").info(
+                "Cleared %d stale discover cache entries (no OpenAgenda key).",
+                removed,
+            )
+    yield
+
+
 app = FastAPI(
     title="CityChilly API",
     version=__version__,
     description="Discover activities and outdoor events for any city.",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -60,6 +77,17 @@ def _normalize_client_key(openagenda_key: str | None) -> str | None:
     if not key or len(key) > _OA_KEY_MAX_LEN or not key.startswith(_OA_KEY_PREFIX):
         return None
     return key
+
+
+def _discover_cache_usable(
+    cached: DiscoverResponse,
+    *,
+    live_events_only: bool,
+) -> bool:
+    """Reject stale rows that pre-date an OpenAgenda key (curated-only snapshots)."""
+    if live_events_only or not settings.OPENAGENDA_KEY:
+        return True
+    return any("openagenda" in (event.tags or []) for event in cached.events)
 
 
 def _openagenda_cache_tag(openagenda_key: str | None) -> str:
@@ -228,7 +256,7 @@ async def discover(
         )
         if not refresh:
             cached = cache.get(cache_key)
-            if cached:
+            if cached and _discover_cache_usable(cached, live_events_only=live_events_only):
                 return cached
         place = Place(
             name=display,
@@ -247,7 +275,7 @@ async def discover(
         )
         if not refresh:
             cached = cache.get(cache_key)
-            if cached:
+            if cached and _discover_cache_usable(cached, live_events_only=live_events_only):
                 return cached
         try:
             place = await geocode_city(effective_city, effective_country, lang=lng)
@@ -300,7 +328,9 @@ async def discover(
     )
     # Never cache a degraded result, otherwise a transient Overpass outage would
     # be "stuck" for the whole cache window. Cache only successful lookups.
-    if not activities_degraded:
+    if not activities_degraded and _discover_cache_usable(
+        response, live_events_only=live_events_only
+    ):
         cache.set(cache_key, response)
     return response
 
@@ -314,17 +344,19 @@ if WEB_DIR.exists():
     async def index() -> FileResponse:
         return FileResponse(WEB_DIR / "index.html")
 
+    _STATIC_NO_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
+
     @app.get("/app.js")
     async def appjs() -> FileResponse:
-        return FileResponse(WEB_DIR / "app.js")
+        return FileResponse(WEB_DIR / "app.js", headers=_STATIC_NO_CACHE)
 
     @app.get("/i18n.js")
     async def i18njs() -> FileResponse:
-        return FileResponse(WEB_DIR / "i18n.js")
+        return FileResponse(WEB_DIR / "i18n.js", headers=_STATIC_NO_CACHE)
 
     @app.get("/styles.css")
     async def styles() -> FileResponse:
-        return FileResponse(WEB_DIR / "styles.css")
+        return FileResponse(WEB_DIR / "styles.css", headers=_STATIC_NO_CACHE)
 
     @app.get("/manifest.webmanifest")
     async def manifest() -> FileResponse:

@@ -408,7 +408,7 @@ async def _fetch_openagenda_raw(
                 if len(collected) >= _OA_MAX_EVENTS:
                     return collected
 
-    # Experimental cross-agenda index — optional; most keys lack access.
+    # Optional cross-agenda index — most API keys lack access (HTTP 403).
     for params in (
         _oa_event_params(lang, city=city, lat=lat, lon=lon),
         _oa_event_params(lang, lat=lat, lon=lon),
@@ -418,6 +418,7 @@ async def _fetch_openagenda_raw(
         _merge(payload.get("events") or [])
         if collected:
             return collected
+
     return collected
 
 
@@ -472,7 +473,7 @@ async def _openagenda_events(
     city_name: str | None = None,
 ) -> tuple[list[Item], str | None]:
     """Return (events, status). status is 'auth', 'empty', or None on success."""
-    key = (openagenda_key or "").strip() or settings.OPENAGENDA_KEY
+    key = _resolve_openagenda_key(openagenda_key)
     if not key:
         return [], None
 
@@ -511,7 +512,7 @@ def _pick_lang(value, prefer=("en", "fr")):
 
 
 def _has_openagenda_key(openagenda_key: str | None = None) -> bool:
-    return bool((openagenda_key or "").strip() or settings.OPENAGENDA_KEY)
+    return _resolve_openagenda_key(openagenda_key) is not None
 
 
 def _resolve_openagenda_key(openagenda_key: str | None = None) -> str | None:
@@ -567,10 +568,10 @@ async def get_events(
         lang=lang,
         city_name=city,
     )
-    if live:
-        return live, notices
 
     if live_only:
+        if live:
+            return live, notices
         if not has_key:
             notices.append(notice_live_events_only_no_key(lang))
         elif oa_status == "auth":
@@ -580,18 +581,30 @@ async def get_events(
         return [], notices
 
     curated = _curated_events(place, lang=lang, city_key=city)
-    if has_key:
+
+    seen_ids: set[str] = set()
+    merged: list[Item] = []
+    for item in live + curated:
+        if item.id in seen_ids:
+            continue
+        seen_ids.add(item.id)
+        merged.append(item)
+    merged.sort(key=lambda i: i.start or "")
+
+    if live and curated:
+        pass
+    elif has_key:
         if oa_status == "auth":
             notices.append(notice_openagenda_auth_failed(lang))
-        elif curated:
+        elif not live and curated:
             notices.append(notice_openagenda_fallback(city, lang))
-        else:
+        elif not live and not curated:
             notices.append(notice_openagenda_no_results(city, lang))
     elif curated:
         notices.append(notice_curated_highlights(lang))
 
-    if curated:
-        return curated, notices
+    if merged:
+        return merged, notices
 
     if not has_key:
         notices.append(notice_no_event_feed(city, lang))

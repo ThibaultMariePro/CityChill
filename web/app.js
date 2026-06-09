@@ -42,8 +42,10 @@
     categories: [],
     filters: { category: "all", kind: "all", outdoorOnly: false, eventPeriod: "all", liveEventsOnly: false },
     openagendaEnabled: false,
+    serverOpenAgendaConfigured: false,
     connectionOk: null,
     refreshInFlight: false,
+    oaRenderRetry: false,
     tab: "discover",
     keySpecs: [],
     themePalettes: [],
@@ -418,10 +420,30 @@
     $("#agenda-count").textContent = Object.keys(agenda()).length;
   }
 
+  const isLiveEvent = (item) =>
+    item.kind === "event" && (item.tags || []).includes("openagenda");
+
   const isCuratedEvent = (item) =>
     item.kind === "event"
     && (item.tags || []).includes("curated")
-    && !(item.tags || []).includes("openagenda");
+    && !isLiveEvent(item);
+
+  function rawDiscoverCounts() {
+    const counts = { live: 0, curated: 0, activities: 0 };
+    for (const pin of state.pins) {
+      const data = state.pinData[pin.id];
+      if (!data) continue;
+      for (const item of data.activities ?? []) {
+        if (item.kind === "activity") counts.activities += 1;
+      }
+      for (const item of data.events ?? []) {
+        if (item.kind !== "event") continue;
+        if (isLiveEvent(item)) counts.live += 1;
+        else if ((item.tags || []).includes("curated")) counts.curated += 1;
+      }
+    }
+    return counts;
+  }
 
   /* ── card ────────────────────────────────────────────────────────────── */
   function card(item) {
@@ -431,6 +453,9 @@
 
     const media = el("div", `card__media cat-${esc(item.category)}`);
     const keyword = itemKeyword(item);
+    const liveHint = isLiveEvent(item)
+      ? `<span class="card__live-hint" title="${esc(t("card.liveHint"))}" aria-label="${esc(t("card.liveHint"))}">Live</span>`
+      : "";
     const curatedHint = isCuratedEvent(item)
       ? `<span class="card__curated-hint" title="${esc(t("card.curatedHint"))}" aria-label="${esc(t("card.curatedHint"))}">ℹ️</span>`
       : "";
@@ -439,6 +464,7 @@
         <div class="card__header">
           <span class="card__emoji" aria-hidden="true">${meta.emoji}</span>
           <p class="card__keyword">${esc(keyword)}</p>
+          ${liveHint}
           ${curatedHint}
         </div>
         <button class="card__fav ${isFav(item.id) ? "is-active" : ""}" title="${esc(t("card.fav"))}" aria-label="${esc(t("card.fav"))}">
@@ -588,7 +614,23 @@
     const grid  = $("#discover-grid");
     const empty = $("#discover-empty");
     const meta  = $("#results-meta");
+    const hint  = $("#results-filter-hint");
     grid.innerHTML = "";
+
+    const raw = rawDiscoverCounts();
+    if (
+      !state.oaRenderRetry
+      && !state.refreshInFlight
+      && raw.live === 0
+      && raw.curated > 0
+      && (serverHasOpenAgendaKey() || state.connectionOk)
+      && state.pins.every((p) => state.pinData[p.id])
+    ) {
+      state.oaRenderRetry = true;
+      reloadSelection({ refresh: true, oaRetry: true });
+      return;
+    }
+
     const items   = filteredItems();
     const loaded  = state.pins.filter((p) => state.pinData[p.id]);
     const codes = state.pins.map((p) => p.postcode).filter(Boolean);
@@ -598,9 +640,27 @@
         ? `${loaded.length} locations`
         : (loaded[0] ? (state.pinData[loaded[0].id]?.place?.name || loaded[0].name) : t("results.yourCity"));
 
-    meta.textContent = items.length === 1
+    const headline = items.length === 1
       ? t("results.count", { count: items.length, place: locText })
       : t("results.countPlural", { count: items.length, place: locText });
+    const breakdown = [];
+    if (raw.live) breakdown.push(t("results.live", { count: raw.live }));
+    if (raw.curated) breakdown.push(t("results.curated", { count: raw.curated }));
+    if (raw.activities) breakdown.push(t("results.activities", { count: raw.activities }));
+    meta.innerHTML = breakdown.length
+      ? `${esc(headline)}<span class="results-meta__detail">${esc(breakdown.join(" · "))}</span>`
+      : esc(headline);
+
+    const shownLive = items.filter((it) => isLiveEvent(it)).length;
+    if (hint) {
+      if (raw.live > 0 && shownLive === 0) {
+        hint.hidden = false;
+        hint.textContent = t("results.filterHidesLive", { count: raw.live });
+      } else {
+        hint.hidden = true;
+        hint.textContent = "";
+      }
+    }
 
     if (!items.length) {
       empty.hidden = false;
@@ -918,10 +978,32 @@
     }
   }
 
+  function serverHasOpenAgendaKey() {
+    return state.serverOpenAgendaConfigured || state.keySpecs.some(
+      (spec) => spec.id === "openagenda_key" && spec.server_configured
+    );
+  }
+
   function appendApiKeysToSearchParams(sp) {
+    // When Docker/env provides a key, never let a stale browser override break discover.
+    if (serverHasOpenAgendaKey()) return sp;
     const key = readParams().openagenda_key?.trim();
     if (key && isPlausibleOpenAgendaKey(key)) sp.set("openagenda_key", key);
     return sp;
+  }
+
+  function needsOpenAgendaRefresh() {
+    if (!state.pins.length || !state.pins.every((p) => state.pinData[p.id])) return false;
+    if (!serverHasOpenAgendaKey() && !state.connectionOk) return false;
+    const eventCards = state.pins.flatMap((p) => state.pinData[p.id]?.events ?? [])
+      .filter((e) => e.kind === "event");
+    if (!eventCards.length) return false;
+    return !eventCards.some((e) => (e.tags || []).includes("openagenda"));
+  }
+
+  function purgeBrowserKeyWhenServerConfigured() {
+    if (!serverHasOpenAgendaKey()) return;
+    if (readParams().openagenda_key) saveParams({});
   }
 
   function appendDiscoverParams(sp, { forDiscover = false } = {}) {
@@ -998,14 +1080,16 @@
       if (!res.ok) throw new Error("health failed");
       const data = await res.json();
       if (data.default_country) defaultCountry = data.default_country;
+      state.serverOpenAgendaConfigured = Boolean(data.openagenda_enabled);
       state.connectionOk = Boolean(data.connection_ok);
       state.openagendaEnabled = state.connectionOk;
+      purgeBrowserKeyWhenServerConfigured();
 
       if (
         !state.connectionOk
         && testKey === undefined
         && readParams().openagenda_key
-        && state.keySpecs.some((s) => s.id === "openagenda_key" && s.server_configured)
+        && serverHasOpenAgendaKey()
       ) {
         saveParams({});
         healthInFlight = false;
@@ -1750,7 +1834,7 @@
   }
 
   /** Re-fetch discover data for every pinned location and rebuild the UI. */
-  async function reloadSelection({ refresh = false } = {}) {
+  async function reloadSelection({ refresh = false, oaRetry = false } = {}) {
     const gen = ++loadGeneration;
     prunePinData();
     savePins();
@@ -1831,6 +1915,14 @@
       if (refresh && gen === loadGeneration && Object.keys(state.pinData).length) {
         toast(t("toast.refreshDone"));
         checkApiHealth({ force: true });
+      }
+
+      if (rawDiscoverCounts().live > 0) {
+        state.oaRenderRetry = false;
+      }
+
+      if (!oaRetry && !refresh && gen === loadGeneration && needsOpenAgendaRefresh()) {
+        await reloadSelection({ refresh: true, oaRetry: true });
       }
     } finally {
       if (gen === loadGeneration) {
@@ -2131,7 +2223,7 @@
     return typeof v === "string" ? v : null;
   }
 
-  function init() {
+  async function init() {
     readParams();
 
     const savedPalette = readString(LS.palette);
@@ -2153,42 +2245,39 @@
     applyTheme(theme);
 
     wire();
-    checkApiHealth({ force: true });
     updateRefreshButton();
     renderTimeFilter();
     refreshCounts();
     updateAgendaExportBar();
-    loadCategories();
     state.filters.liveEventsOnly = localStorage.getItem(LS.liveEventsOnly) === "1";
     renderLiveEventsToggle();
 
-    Promise.all([loadThemePalettes(), loadKeySpecs()]).then(() => {
-      const savedPal = readString(LS.palette);
-      if (savedPal && state.themePalettes.some((p) => p.id === savedPal)) {
-        applyPalette(savedPal, { save: false });
-      } else if (state.serverPalette) {
-        state.activePalette = state.serverPalette;
-      }
-      renderLanguagePicker();
-      renderParameters();
-      if (state.filters.liveEventsOnly && state.filters.kind === "all") {
-        state.filters.kind = "event";
-      }
-      syncKindFilterUI();
-      renderLiveEventsToggle();
-      checkApiHealth({ force: true });
-    });
+    await Promise.all([loadThemePalettes(), loadKeySpecs(), loadCategories()]);
+    const savedPal = readString(LS.palette);
+    if (savedPal && state.themePalettes.some((p) => p.id === savedPal)) {
+      applyPalette(savedPal, { save: false });
+    } else if (state.serverPalette) {
+      state.activePalette = state.serverPalette;
+    }
+    renderLanguagePicker();
+    renderParameters();
+    purgeBrowserKeyWhenServerConfigured();
+    if (state.filters.liveEventsOnly && state.filters.kind === "all") {
+      state.filters.kind = "event";
+    }
+    syncKindFilterUI();
+    renderLiveEventsToggle();
+    await checkApiHealth({ force: true });
 
-    // Restore pinned locations (new format) or fall back to legacy lastCity
     const savedPins = readPins();
     if (savedPins) {
       state.pins = savedPins;
       state.pinData = {};
-      reloadSelection();
+      await reloadSelection({ refresh: true });
     } else {
       const lastCity = readString(LS.city) || "Nantes";
       $("#city-input").value = lastCity;
-      loadCityName(lastCity);
+      await loadCityName(lastCity, { refresh: true });
     }
   }
 
