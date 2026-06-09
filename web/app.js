@@ -1250,6 +1250,11 @@
     };
   }
 
+  function clearPinSelection() {
+    state.pins = [];
+    state.pinData = {};
+  }
+
   function addPin(suggestion) {
     const pin = suggestionToPin(suggestion);
     if (state.pins.some((p) => p.id === pin.id)) {
@@ -1308,7 +1313,9 @@
     }
   }
 
-  async function addAllPostcodesFromArea(area) {
+  async function addAllPostcodesFromArea(area, { replace = false } = {}) {
+    if (replace) clearPinSelection();
+
     const codes = (area.postcodes || []).filter((code) => !isPostcodePinned(code));
     if (!codes.length) {
       toast(t("toast.areaFullyPinned", { city: area.name }));
@@ -1619,6 +1626,7 @@
         postcodes: [],
       };
 
+      clearPinSelection();
       state.pins = [pin];
       state.pinData = { [pin.id]: data };
       savePins();
@@ -1691,24 +1699,19 @@
           toast(t("toast.alreadyPinned", { label: query }));
           return;
         }
-        state.pins = [];
-        state.pinData = {};
+        clearPinSelection();
         await addPinFromPostcode(query);
         return;
       }
 
-      // City with agglomeration — pin all postal codes by default
+      // Enter without an explicit pin action → replace the current selection.
       const areaSuggestion = acSuggestions.find(
         (s) => s.kind === "area" && (s.postcodes || []).length > 1
       );
       if (areaSuggestion && listOpen) {
-        await addAllPostcodesFromArea(areaSuggestion);
+        await addAllPostcodesFromArea(areaSuggestion, { replace: true });
         return;
       }
-
-      // Fall back to the first pinable suggestion if dropdown is visible
-      const firstPin = $("#autocomplete-list .ac-item:not(.ac-item--area):not(.is-pinned) .ac-item__pin:not(:disabled)");
-      if (firstPin && listOpen) { firstPin.click(); return; }
 
       setTab("discover");
       closeDropdown();
