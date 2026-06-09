@@ -515,8 +515,11 @@ def _has_openagenda_key(openagenda_key: str | None = None) -> bool:
 
 
 def _resolve_openagenda_key(openagenda_key: str | None = None) -> str | None:
-    key = (openagenda_key or "").strip() or (settings.OPENAGENDA_KEY or "")
-    return key or None
+    client = (openagenda_key or "").strip() or None
+    if client:
+        return client
+    server = (settings.OPENAGENDA_KEY or "").strip() or None
+    return server
 
 
 async def verify_openagenda_key(openagenda_key: str | None = None) -> dict[str, bool]:

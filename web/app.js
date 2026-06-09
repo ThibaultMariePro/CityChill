@@ -42,6 +42,8 @@
     categories: [],
     filters: { category: "all", kind: "all", outdoorOnly: false, eventPeriod: "all", liveEventsOnly: false },
     openagendaEnabled: false,
+    connectionOk: null,
+    refreshInFlight: false,
     tab: "discover",
     keySpecs: [],
     themePalettes: [],
@@ -546,6 +548,7 @@
     empty.hidden = false;
     empty.innerHTML = `<div class="empty__emoji">📍</div><h3>${esc(t("empty.noPins.title"))}</h3><p>${esc(t("empty.noPins.body"))}</p>`;
     $("#results-meta").textContent = t("results.zero");
+    updateRefreshButton();
   }
 
   function allItems() {
@@ -872,22 +875,52 @@
   }
 
   /* ── parameters / API keys ───────────────────────────────────────────── */
+  const OA_KEY_RE = /^oa_[A-Za-z0-9_]{8,180}$/;
+
+  function isPlausibleOpenAgendaKey(key) {
+    return typeof key === "string" && OA_KEY_RE.test(key.trim());
+  }
+
+  function sanitizeParams(params) {
+    const next = { ...params };
+    const key = next.openagenda_key?.trim();
+    if (key && !isPlausibleOpenAgendaKey(key)) delete next.openagenda_key;
+    return next;
+  }
+
   function readParams() {
     try {
       const raw = localStorage.getItem(LS.params);
-      return raw ? JSON.parse(raw) : {};
-    } catch { return {}; }
+      const parsed = raw ? JSON.parse(raw) : {};
+      const clean = sanitizeParams(parsed);
+      if (JSON.stringify(clean) !== JSON.stringify(parsed)) {
+        saveParams(clean);
+      }
+      return clean;
+    } catch {
+      localStorage.removeItem(LS.params);
+      return {};
+    }
   }
 
   function saveParams(values) {
-    localStorage.setItem(LS.params, JSON.stringify(values));
+    const cleaned = {};
+    for (const [id, value] of Object.entries(values)) {
+      const trimmed = typeof value === "string" ? value.trim() : "";
+      if (!trimmed) continue;
+      if (id === "openagenda_key" && !isPlausibleOpenAgendaKey(trimmed)) continue;
+      cleaned[id] = trimmed;
+    }
+    if (Object.keys(cleaned).length) {
+      localStorage.setItem(LS.params, JSON.stringify(cleaned));
+    } else {
+      localStorage.removeItem(LS.params);
+    }
   }
 
   function appendApiKeysToSearchParams(sp) {
-    const params = readParams();
-    if (params.openagenda_key?.trim()) {
-      sp.set("openagenda_key", params.openagenda_key.trim());
-    }
+    const key = readParams().openagenda_key?.trim();
+    if (key && isPlausibleOpenAgendaKey(key)) sp.set("openagenda_key", key);
     return sp;
   }
 
@@ -936,33 +969,74 @@
     el.setAttribute("aria-label", el.title);
   }
 
-  async function checkApiHealth({ force = false } = {}) {
+  async function checkApiHealth({ force = false, testKey } = {}) {
     const now = Date.now();
     if (!force && now - lastHealthAt < HEALTH_MIN_INTERVAL_MS) {
       clearTimeout(healthRetryTimer);
       healthRetryTimer = setTimeout(
-        () => checkApiHealth({ force: true }),
+        () => checkApiHealth({ force: true, testKey }),
         HEALTH_MIN_INTERVAL_MS - (now - lastHealthAt)
       );
-      return;
+      return null;
     }
-    if (healthInFlight) return;
+    if (healthInFlight) return null;
 
     healthInFlight = true;
     renderApiStatus({ checking: true });
     try {
-      const sp = appendApiKeysToSearchParams(new URLSearchParams());
-      const res = await fetch(`${API}/api/health?${sp}`);
+      const sp = new URLSearchParams();
+      if (testKey !== undefined) {
+        const trimmed = testKey?.trim();
+        if (trimmed && isPlausibleOpenAgendaKey(trimmed)) {
+          sp.set("openagenda_key", trimmed);
+        }
+      } else {
+        appendApiKeysToSearchParams(sp);
+      }
+      const qs = sp.toString();
+      const res = await fetch(`${API}/api/health${qs ? `?${qs}` : ""}`);
       if (!res.ok) throw new Error("health failed");
       const data = await res.json();
       if (data.default_country) defaultCountry = data.default_country;
-      state.openagendaEnabled = Boolean(
-        data.openagenda_enabled || data.openagenda?.configured
-      );
+      state.connectionOk = Boolean(data.connection_ok);
+      state.openagendaEnabled = state.connectionOk;
+
+      if (
+        !state.connectionOk
+        && testKey === undefined
+        && readParams().openagenda_key
+        && state.keySpecs.some((s) => s.id === "openagenda_key" && s.server_configured)
+      ) {
+        saveParams({});
+        healthInFlight = false;
+        return checkApiHealth({ force: true, testKey: null });
+      }
+
       renderApiStatus(data);
       renderLiveEventsToggle();
+      return data;
     } catch {
+      if (testKey === undefined) {
+        try {
+          const raw = localStorage.getItem(LS.params);
+          if (raw) {
+            const key = JSON.parse(raw).openagenda_key?.trim();
+            if (key && !isPlausibleOpenAgendaKey(key)) {
+              saveParams({});
+              healthInFlight = false;
+              return checkApiHealth({ force: true, testKey: null });
+            }
+          }
+        } catch {
+          saveParams({});
+          healthInFlight = false;
+          return checkApiHealth({ force: true, testKey: null });
+        }
+      }
+      state.connectionOk = false;
+      state.openagendaEnabled = false;
       renderApiStatus(null);
+      return null;
     } finally {
       lastHealthAt = Date.now();
       healthInFlight = false;
@@ -985,11 +1059,12 @@
   }
 
   function hasOpenAgendaKey() {
-    const clientKey = readParams().openagenda_key?.trim();
+    if (state.connectionOk === true) return true;
+    if (state.connectionOk === false) return false;
     const serverConfigured = state.keySpecs.some(
       (spec) => spec.id === "openagenda_key" && spec.server_configured
     );
-    return state.openagendaEnabled || serverConfigured || Boolean(clientKey);
+    return serverConfigured || Boolean(readParams().openagenda_key?.trim());
   }
 
   function renderLiveEventsToggle() {
@@ -1175,8 +1250,11 @@
           id="param-${esc(spec.id)}"
           name="${esc(spec.id)}"
           type="password"
-          autocomplete="off"
+          autocomplete="new-password"
+          autocapitalize="off"
           spellcheck="false"
+          data-lpignore="true"
+          data-1p-ignore="true"
           placeholder="${spec.server_configured ? "Leave empty to use server key" : "Paste your API key"}"
           value="${esc(saved[spec.id] || "")}"
         />
@@ -1191,7 +1269,8 @@
     const values = {};
     state.keySpecs.forEach((spec) => {
       const input = document.getElementById(`param-${spec.id}`);
-      if (input) values[spec.id] = input.value.trim();
+      const trimmed = input?.value.trim();
+      if (trimmed) values[spec.id] = trimmed;
     });
     return values;
   }
@@ -1331,7 +1410,11 @@
   function renderPinnedChips() {
     const bar       = $("#pinned-bar");
     const container = $("#pinned-chips");
-    if (!state.pins.length) { bar.hidden = true; return; }
+    if (!state.pins.length) {
+      bar.hidden = true;
+      updateRefreshButton();
+      return;
+    }
     bar.hidden        = false;
     container.innerHTML = "";
 
@@ -1368,6 +1451,7 @@
         container.appendChild(chip);
       });
     });
+    updateRefreshButton();
   }
 
   function suggestionToPin(suggestion) {
@@ -1638,7 +1722,14 @@
     renderChips();
   }
 
-  async function fetchDiscoverForPin(pin) {
+  function updateRefreshButton() {
+    const btn = $("#discover-refresh");
+    if (!btn) return;
+    btn.disabled = !state.pins.length || state.refreshInFlight;
+    btn.classList.toggle("is-spinning", state.refreshInFlight);
+  }
+
+  async function fetchDiscoverForPin(pin, { refresh = false } = {}) {
     const placeName = pin.postcode ? `${pin.postcode} · ${pin.name}` : pin.name;
     const params = {
       lat: String(pin.latitude),
@@ -1649,6 +1740,7 @@
       params.city_name = pin.name;
     }
     const sp = appendDiscoverParams(new URLSearchParams(params), { forDiscover: true });
+    if (refresh) sp.set("refresh", "1");
     const res = await fetch(`${API}/api/discover?${sp}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -1658,11 +1750,12 @@
   }
 
   /** Re-fetch discover data for every pinned location and rebuild the UI. */
-  async function reloadSelection() {
+  async function reloadSelection({ refresh = false } = {}) {
     const gen = ++loadGeneration;
     prunePinData();
     savePins();
     renderPinnedChips();
+    updateRefreshButton();
 
     if (!state.pins.length) {
       clearResults();
@@ -1677,13 +1770,18 @@
     renderWarnings();
     renderActivePanel();
 
-    const loadingTimer = setTimeout(() => showLoading(true, t("loading.updating")), 220);
+    const loadingMsg = refresh ? t("loading.refresh") : t("loading.updating");
+    const loadingTimer = setTimeout(() => showLoading(true, loadingMsg), 220);
+    if (refresh) {
+      state.refreshInFlight = true;
+      updateRefreshButton();
+    }
 
     try {
       const results = await Promise.all(
         state.pins.map(async (pin) => {
           try {
-            const data = await fetchDiscoverForPin(pin);
+            const data = await fetchDiscoverForPin(pin, { refresh });
             return { pin, data, error: null };
           } catch (error) {
             return { pin, data: null, error };
@@ -1730,21 +1828,38 @@
       renderWeather();
       renderWarnings();
       renderActivePanel();
+      if (refresh && gen === loadGeneration && Object.keys(state.pinData).length) {
+        toast(t("toast.refreshDone"));
+        checkApiHealth({ force: true });
+      }
     } finally {
       if (gen === loadGeneration) {
         clearTimeout(loadingTimer);
         showLoading(false);
       }
+      if (refresh) {
+        state.refreshInFlight = false;
+        updateRefreshButton();
+      }
     }
   }
 
+  async function refreshOpenAgenda() {
+    if (!state.pins.length) {
+      toast(t("toast.refreshNoPins"));
+      return;
+    }
+    await reloadSelection({ refresh: true });
+  }
+
   /** Load by city name string (legacy path & form fallback — geocodes on the server). */
-  async function loadCityName(city) {
+  async function loadCityName(city, { refresh = false } = {}) {
     const loadingTimer = setTimeout(
       () => showLoading(true, t("loading.city", { city })), 220
     );
     try {
       const sp = appendDiscoverParams(new URLSearchParams({ city }), { forDiscover: true });
+      if (refresh) sp.set("refresh", "1");
       const res = await fetch(`${API}/api/discover?${sp}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1913,6 +2028,8 @@
       if (e.key === "Escape") closeTimeFilterMenu();
     });
 
+    $("#discover-refresh")?.addEventListener("click", () => refreshOpenAgenda());
+
     $("#live-events-only")?.addEventListener("change", (e) => {
       setLiveEventsOnly(e.target.checked);
     });
@@ -1953,10 +2070,27 @@
 
     $("#params-form").addEventListener("submit", async (e) => {
       e.preventDefault();
-      saveParams(collectParamsFromForm());
-      toast(t("toast.paramsSaved"));
+      const rawKey = document.getElementById("param-openagenda_key")?.value.trim();
+      if (rawKey && !isPlausibleOpenAgendaKey(rawKey)) {
+        toast(t("toast.keyMalformed"));
+        return;
+      }
+      const values = collectParamsFromForm();
+      const testKey = values.openagenda_key ?? null;
+      const data = await checkApiHealth({ force: true, testKey });
+      if (testKey && !data?.connection_ok) {
+        toast(t("toast.keyInvalid"));
+        return;
+      }
+      saveParams(values);
+      toast(
+        testKey
+          ? t("toast.keyValid")
+          : data?.connection_ok
+            ? t("toast.paramsSaved")
+            : t("toast.keyMissing")
+      );
       renderLiveEventsToggle();
-      checkApiHealth({ force: true });
       if (state.pins.length) {
         await reloadSelection();
         setTab("discover");
@@ -1969,9 +2103,13 @@
         const input = document.getElementById(`param-${spec.id}`);
         if (input) input.value = "";
       });
+      const data = await checkApiHealth({ force: true, testKey: null });
       renderLiveEventsToggle();
-      checkApiHealth({ force: true });
-      toast(t("toast.keysCleared"));
+      toast(
+        data?.connection_ok
+          ? t("toast.keysClearedServer")
+          : t("toast.keysCleared")
+      );
       if (state.pins.length) await reloadSelection();
     });
 
@@ -1994,6 +2132,8 @@
   }
 
   function init() {
+    readParams();
+
     const savedPalette = readString(LS.palette);
     if (savedPalette) {
       const link = document.querySelector('link[href*="/api/theme.css"]');
@@ -2014,6 +2154,7 @@
 
     wire();
     checkApiHealth({ force: true });
+    updateRefreshButton();
     renderTimeFilter();
     refreshCounts();
     updateAgendaExportBar();
@@ -2035,6 +2176,7 @@
       }
       syncKindFilterUI();
       renderLiveEventsToggle();
+      checkApiHealth({ force: true });
     });
 
     // Restore pinned locations (new format) or fall back to legacy lastCity

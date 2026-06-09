@@ -601,6 +601,37 @@ a { color: inherit; }
 }
 .seg.is-active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
 
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .15s ease, opacity .15s ease, transform .15s ease;
+}
+.refresh-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--teal) 45%, var(--border));
+}
+.refresh-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.refresh-btn.is-spinning .refresh-btn__icon {
+  display: inline-block;
+  animation: refresh-spin .8s linear infinite;
+}
+@keyframes refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .time-filter { position: relative; }
 .time-filter__btn {
   display: inline-flex; align-items: center; gap: 6px;

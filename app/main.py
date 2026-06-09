@@ -48,9 +48,23 @@ cache = TTLCache(settings.CACHE_TTL_SECONDS)
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
+_OA_KEY_PREFIX = "oa_"
+_OA_KEY_MAX_LEN = 200
+
+
+def _normalize_client_key(openagenda_key: str | None) -> str | None:
+    """Ignore blank or malformed client keys so the server env key can be used."""
+    if not openagenda_key:
+        return None
+    key = openagenda_key.strip()
+    if not key or len(key) > _OA_KEY_MAX_LEN or not key.startswith(_OA_KEY_PREFIX):
+        return None
+    return key
+
+
 def _openagenda_cache_tag(openagenda_key: str | None) -> str:
     """Short cache suffix so discover results differ when the OA key changes."""
-    key = (openagenda_key or "").strip() or (settings.OPENAGENDA_KEY or "")
+    key = _normalize_client_key(openagenda_key) or (settings.OPENAGENDA_KEY or "")
     if not key:
         return "oa-none"
     return "oa-" + hashlib.sha256(key.encode()).hexdigest()[:10]
@@ -85,15 +99,16 @@ async def clear_cache() -> dict:
 
 @app.get("/api/health")
 async def health(
-    openagenda_key: str | None = Query(default=None, max_length=200),
+    openagenda_key: str | None = Query(default=None),
 ) -> dict:
     """Liveness plus OpenAgenda key validation (cached ~20s per key)."""
-    oa_tag = _openagenda_cache_tag(openagenda_key)
+    client_key = _normalize_client_key(openagenda_key)
+    oa_tag = _openagenda_cache_tag(client_key)
     oa_bucket = int(time.time() // 20)
     oa_cache_key = f"health::oa::{oa_tag}::{oa_bucket}"
     cached_oa = cache.get(oa_cache_key)
     if cached_oa is None:
-        oa = await verify_openagenda_key(openagenda_key)
+        oa = await verify_openagenda_key(client_key)
         cache.set(oa_cache_key, oa)
     else:
         oa = cached_oa
@@ -193,11 +208,13 @@ async def discover(
     lon: float | None = Query(default=None, ge=-180.0, le=180.0),
     place_name: str | None = Query(default=None, max_length=200),
     city_name: str | None = Query(default=None, max_length=120),
-    openagenda_key: str | None = Query(default=None, max_length=200),
+    openagenda_key: str | None = Query(default=None),
     live_events_only: bool = Query(default=False),
+    refresh: bool = Query(default=False),
     lang: str = Query(default="en", max_length=8),
 ) -> DiscoverResponse:
-    oa_tag = _openagenda_cache_tag(openagenda_key)
+    client_key = _normalize_client_key(openagenda_key)
+    oa_tag = _openagenda_cache_tag(client_key)
     live_tag = "live" if live_events_only else "all"
     lng = normalize_lang(lang)
 
@@ -209,9 +226,10 @@ async def discover(
             f"discover::coords::{_make_pin_id(lat, lon)}::"
             f"{effective_city.lower()}::{oa_tag}::{live_tag}::{lng}"
         )
-        cached = cache.get(cache_key)
-        if cached:
-            return cached
+        if not refresh:
+            cached = cache.get(cache_key)
+            if cached:
+                return cached
         place = Place(
             name=display,
             latitude=lat,
@@ -227,9 +245,10 @@ async def discover(
             f"discover::{effective_city.lower()}::"
             f"{effective_country.lower()}::{oa_tag}::{live_tag}::{lng}"
         )
-        cached = cache.get(cache_key)
-        if cached:
-            return cached
+        if not refresh:
+            cached = cache.get(cache_key)
+            if cached:
+                return cached
         try:
             place = await geocode_city(effective_city, effective_country, lang=lng)
         except ValueError as exc:
@@ -242,7 +261,7 @@ async def discover(
         get_activities(place),
         get_events(
             place,
-            openagenda_key=openagenda_key,
+            openagenda_key=client_key,
             lang=lng,
             city_name=city_name or (city or "").strip() or None,
             live_only=live_events_only,
