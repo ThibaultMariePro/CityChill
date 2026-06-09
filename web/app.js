@@ -30,6 +30,7 @@
     palette:          "citychilly:palette",
     lang:             "citychilly:lang",
     dismissedNotices: "citychilly:dismissedNotices",
+    liveEventsOnly: "citychilly:liveEventsOnly",
   };
 
   /* ── state ───────────────────────────────────────────────────────────── */
@@ -39,7 +40,8 @@
     pinData: {},   // id → DiscoverResponse (place, weather, activities, events, notices)
     // UI
     categories: [],
-    filters: { category: "all", kind: "all", outdoorOnly: false, eventPeriod: "all" },
+    filters: { category: "all", kind: "all", outdoorOnly: false, eventPeriod: "all", liveEventsOnly: false },
+    openagendaEnabled: false,
     tab: "discover",
     keySpecs: [],
     themePalettes: [],
@@ -570,6 +572,11 @@
     if (eventPeriod !== "all") {
       items = items.filter((it) => eventMatchesPeriod(it, eventPeriod));
     }
+    if (state.filters.liveEventsOnly) {
+      items = items.filter(
+        (it) => it.kind !== "event" || (it.tags || []).includes("openagenda")
+      );
+    }
     return items;
   }
 
@@ -884,10 +891,13 @@
     return sp;
   }
 
-  function appendDiscoverParams(sp) {
+  function appendDiscoverParams(sp, { forDiscover = false } = {}) {
     appendApiKeysToSearchParams(sp);
     appendLangToSearchParams(sp);
     if (defaultCountry) sp.set("country", defaultCountry);
+    if (forDiscover && state.filters.liveEventsOnly) {
+      sp.set("live_events_only", "1");
+    }
     return sp;
   }
 
@@ -897,7 +907,49 @@
       if (!res.ok) return;
       const data = await res.json();
       if (data.default_country) defaultCountry = data.default_country;
+      state.openagendaEnabled = Boolean(data.openagenda_enabled);
     } catch { /* offline */ }
+  }
+
+  function hasOpenAgendaKey() {
+    const clientKey = readParams().openagenda_key?.trim();
+    const serverConfigured = state.keySpecs.some(
+      (spec) => spec.id === "openagenda_key" && spec.server_configured
+    );
+    return state.openagendaEnabled || serverConfigured || Boolean(clientKey);
+  }
+
+  function renderLiveEventsToggle() {
+    const input = $("#live-events-only");
+    const wrap = input?.closest(".switch--live");
+    if (!input || !wrap) return;
+    input.checked = state.filters.liveEventsOnly;
+    const hasKey = hasOpenAgendaKey();
+    input.disabled = false;
+    wrap.classList.remove("is-disabled");
+    wrap.title = hasKey ? t("filter.liveTitle") : t("filter.liveNoKey");
+  }
+
+  function syncKindFilterUI() {
+    $$("#kind-filter .seg").forEach((s) => {
+      s.classList.toggle("is-active", s.dataset.kind === state.filters.kind);
+    });
+    renderTimeFilter();
+  }
+
+  async function setLiveEventsOnly(on, { reload = true } = {}) {
+    state.filters.liveEventsOnly = Boolean(on);
+    localStorage.setItem(LS.liveEventsOnly, on ? "1" : "0");
+    if (on && state.filters.kind === "all") {
+      state.filters.kind = "event";
+      syncKindFilterUI();
+    }
+    renderLiveEventsToggle();
+    if (on && !hasOpenAgendaKey()) toast(t("filter.liveNoKey"));
+    else if (on) toast(t("toast.liveOn"));
+    else toast(t("toast.liveOff"));
+    if (reload && state.pins.length) await reloadSelection();
+    else renderDiscover();
   }
 
   async function loadKeySpecs() {
@@ -963,12 +1015,13 @@
     });
   }
 
-  function applyLanguage(lang, { save = true, reload = true } = {}) {
+  function     applyLanguage(lang, { save = true, reload = true } = {}) {
     I18N.setLang(lang);
     if (save) localStorage.setItem(LS.lang, lang);
     renderLanguagePicker();
     I18N.applyStatic();
     renderTimeFilter();
+    renderLiveEventsToggle();
     loadCategories().then(() => {
       renderChips();
       renderHero();
@@ -1522,7 +1575,7 @@
     if (pin.name && pin.name !== pin.postcode) {
       params.city_name = pin.name;
     }
-    const sp = appendDiscoverParams(new URLSearchParams(params));
+    const sp = appendDiscoverParams(new URLSearchParams(params), { forDiscover: true });
     const res = await fetch(`${API}/api/discover?${sp}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -1618,7 +1671,7 @@
       () => showLoading(true, t("loading.city", { city })), 220
     );
     try {
-      const sp = appendDiscoverParams(new URLSearchParams({ city }));
+      const sp = appendDiscoverParams(new URLSearchParams({ city }), { forDiscover: true });
       const res = await fetch(`${API}/api/discover?${sp}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1765,8 +1818,7 @@
     $$("#kind-filter .seg").forEach((b) =>
       b.addEventListener("click", () => {
         state.filters.kind = b.dataset.kind;
-        $$("#kind-filter .seg").forEach((s) => s.classList.toggle("is-active", s === b));
-        renderTimeFilter();
+        syncKindFilterUI();
         renderDiscover();
       })
     );
@@ -1786,6 +1838,10 @@
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeTimeFilterMenu();
+    });
+
+    $("#live-events-only")?.addEventListener("change", (e) => {
+      setLiveEventsOnly(e.target.checked);
     });
 
     $("#outdoor-only").addEventListener("change", (e) => {
@@ -1826,6 +1882,7 @@
       e.preventDefault();
       saveParams(collectParamsFromForm());
       toast(t("toast.paramsSaved"));
+      renderLiveEventsToggle();
       if (state.pins.length) {
         await reloadSelection();
         setTab("discover");
@@ -1838,6 +1895,7 @@
         const input = document.getElementById(`param-${spec.id}`);
         if (input) input.value = "";
       });
+      renderLiveEventsToggle();
       toast(t("toast.keysCleared"));
       if (state.pins.length) await reloadSelection();
     });
@@ -1882,6 +1940,9 @@
     refreshCounts();
     updateAgendaExportBar();
     loadCategories();
+    state.filters.liveEventsOnly = localStorage.getItem(LS.liveEventsOnly) === "1";
+    renderLiveEventsToggle();
+
     Promise.all([loadAppConfig(), loadThemePalettes(), loadKeySpecs()]).then(() => {
       const savedPal = readString(LS.palette);
       if (savedPal && state.themePalettes.some((p) => p.id === savedPal)) {
@@ -1891,6 +1952,11 @@
       }
       renderLanguagePicker();
       renderParameters();
+      if (state.filters.liveEventsOnly && state.filters.kind === "all") {
+        state.filters.kind = "event";
+      }
+      syncKindFilterUI();
+      renderLiveEventsToggle();
     });
 
     // Restore pinned locations (new format) or fall back to legacy lastCity

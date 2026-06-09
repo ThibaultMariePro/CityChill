@@ -667,6 +667,9 @@ a { color: inherit; }
 .switch input:checked + .switch__track { background: var(--teal); border-color: transparent; }
 .switch input:checked + .switch__track .switch__thumb { transform: translateX(18px); background: #fff; }
 .switch input:checked ~ .switch__label { color: var(--text); }
+.switch--live input:checked + .switch__track { background: var(--coral); }
+.switch--live.is-disabled { opacity: .55; cursor: not-allowed; }
+.switch--live.is-disabled .switch__label { cursor: not-allowed; }
 
 .results-meta { color: var(--text-soft); font-size: .85rem; margin-bottom: 14px; }
 

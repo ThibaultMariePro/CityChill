@@ -178,9 +178,11 @@ async def discover(
     place_name: str | None = Query(default=None, max_length=200),
     city_name: str | None = Query(default=None, max_length=120),
     openagenda_key: str | None = Query(default=None, max_length=200),
+    live_events_only: bool = Query(default=False),
     lang: str = Query(default="en", max_length=8),
 ) -> DiscoverResponse:
     oa_tag = _openagenda_cache_tag(openagenda_key)
+    live_tag = "live" if live_events_only else "all"
     lng = normalize_lang(lang)
 
     # ── Coordinate-based path (skips geocoding, used by pinned locations) ──
@@ -189,7 +191,7 @@ async def discover(
         effective_city = (city_name or "").strip()
         cache_key = (
             f"discover::coords::{_make_pin_id(lat, lon)}::"
-            f"{effective_city.lower()}::{oa_tag}::{lng}"
+            f"{effective_city.lower()}::{oa_tag}::{live_tag}::{lng}"
         )
         cached = cache.get(cache_key)
         if cached:
@@ -207,7 +209,7 @@ async def discover(
         effective_country = (country or "").strip() or settings.DEFAULT_COUNTRY
         cache_key = (
             f"discover::{effective_city.lower()}::"
-            f"{effective_country.lower()}::{oa_tag}::{lng}"
+            f"{effective_country.lower()}::{oa_tag}::{live_tag}::{lng}"
         )
         cached = cache.get(cache_key)
         if cached:
@@ -227,6 +229,7 @@ async def discover(
             openagenda_key=openagenda_key,
             lang=lng,
             city_name=city_name or (city or "").strip() or None,
+            live_only=live_events_only,
         ),
         return_exceptions=True,
     )

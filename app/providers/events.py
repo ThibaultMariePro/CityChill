@@ -25,6 +25,8 @@ from app.i18n import (
     normalize_lang,
     notice_curated_highlights,
     notice_no_event_feed,
+    notice_live_events_only_empty,
+    notice_live_events_only_no_key,
     notice_openagenda_auth_failed,
     notice_openagenda_fallback,
     notice_openagenda_no_results,
@@ -518,6 +520,7 @@ async def get_events(
     openagenda_key: str | None = None,
     lang: str = "en",
     city_name: str | None = None,
+    live_only: bool = False,
 ) -> tuple[list[Item], list[str]]:
     """Return (events, notices)."""
     notices: list[str] = []
@@ -532,6 +535,15 @@ async def get_events(
     )
     if live:
         return live, notices
+
+    if live_only:
+        if not has_key:
+            notices.append(notice_live_events_only_no_key(lang))
+        elif oa_status == "auth":
+            notices.append(notice_openagenda_auth_failed(lang))
+        else:
+            notices.append(notice_live_events_only_empty(city, lang))
+        return [], notices
 
     curated = _curated_events(place, lang=lang, city_key=city)
     if has_key:

@@ -131,6 +131,30 @@ def notice_openagenda_fallback(city: str, lang: str | None = None) -> str:
     )
 
 
+def notice_live_events_only_empty(city: str, lang: str | None = None) -> str:
+    if normalize_lang(lang) == "fr":
+        return (
+            f"Aucun événement OpenAgenda en direct pour {city} pour l'instant. "
+            "Les temps forts CityChilly sont masqués en mode « En direct »."
+        )
+    return (
+        f"No live OpenAgenda events for {city} right now. "
+        "CityChilly curated highlights are hidden in Live-only mode."
+    )
+
+
+def notice_live_events_only_no_key(lang: str | None = None) -> str:
+    if normalize_lang(lang) == "fr":
+        return (
+            "Mode « En direct » activé : ajoutez une clé OpenAgenda dans Paramètres "
+            "(ou OPENAGENDA_KEY côté serveur) pour récupérer des événements en direct."
+        )
+    return (
+        "Live-only mode is on: add an OpenAgenda key in Parameters "
+        "(or OPENAGENDA_KEY on the server) to fetch live events."
+    )
+
+
 def notice_openagenda_no_results(city: str, lang: str | None = None) -> str:
     if normalize_lang(lang) == "fr":
         return (
