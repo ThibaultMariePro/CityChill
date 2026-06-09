@@ -19,6 +19,7 @@
   const dateLocale = () => I18N.dateLocale();
 
   const API = "";
+  let defaultCountry = "France";
   const LS = {
     theme:     "citychilly:theme",
     city:      "citychilly:lastCity",   // legacy – read for migration only
@@ -798,6 +799,22 @@
     return sp;
   }
 
+  function appendDiscoverParams(sp) {
+    appendApiKeysToSearchParams(sp);
+    appendLangToSearchParams(sp);
+    if (defaultCountry) sp.set("country", defaultCountry);
+    return sp;
+  }
+
+  async function loadAppConfig() {
+    try {
+      const res = await fetch(`${API}/api/health`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.default_country) defaultCountry = data.default_country;
+    } catch { /* offline */ }
+  }
+
   async function loadKeySpecs() {
     if (state.keySpecs.length) return;
     try {
@@ -1121,7 +1138,7 @@
   async function resolvePostcodeSuggestion(code, parent) {
     const clean = String(code).trim();
     if (!clean) return null;
-      const res = await fetch(`${API}/api/geocode?${appendLangToSearchParams(new URLSearchParams({ q: clean }))}`);
+      const res = await fetch(`${API}/api/geocode?${appendDiscoverParams(new URLSearchParams({ q: clean }))}`);
     if (!res.ok) throw new Error("Lookup failed");
     const data = await res.json();
     const suggestions = data.suggestions || [];
@@ -1224,7 +1241,7 @@
     if (acController) acController.abort();
     acController = new AbortController();
     try {
-      const sp = appendLangToSearchParams(new URLSearchParams({ q: query, count: "8" }));
+      const sp = appendDiscoverParams(new URLSearchParams({ q: query, count: "8" }));
       const res  = await fetch(
         `${API}/api/geocode?${sp}`,
         { signal: acController.signal }
@@ -1360,7 +1377,7 @@
     if (pin.name && pin.name !== pin.postcode) {
       params.city_name = pin.name;
     }
-    const sp = appendLangToSearchParams(appendApiKeysToSearchParams(new URLSearchParams(params)));
+    const sp = appendDiscoverParams(new URLSearchParams(params));
     const res = await fetch(`${API}/api/discover?${sp}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -1456,7 +1473,7 @@
       () => showLoading(true, t("loading.city", { city })), 220
     );
     try {
-      const sp = appendLangToSearchParams(appendApiKeysToSearchParams(new URLSearchParams({ city })));
+      const sp = appendDiscoverParams(new URLSearchParams({ city }));
       const res = await fetch(`${API}/api/discover?${sp}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1705,7 +1722,7 @@
     refreshCounts();
     updateAgendaExportBar();
     loadCategories();
-    Promise.all([loadThemePalettes(), loadKeySpecs()]).then(() => {
+    Promise.all([loadAppConfig(), loadThemePalettes(), loadKeySpecs()]).then(() => {
       const savedPal = readString(LS.palette);
       if (savedPal && state.themePalettes.some((p) => p.id === savedPal)) {
         applyPalette(savedPal, { save: false });

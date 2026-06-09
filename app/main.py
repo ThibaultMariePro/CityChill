@@ -89,6 +89,8 @@ async def health() -> dict:
         "app": settings.APP_NAME,
         "version": __version__,
         "openagenda_enabled": bool(settings.OPENAGENDA_KEY),
+        "default_country": settings.DEFAULT_COUNTRY,
+        "default_city": settings.DEFAULT_CITY,
     }
 
 
@@ -101,7 +103,7 @@ async def geocode_suggest(
     """Return autocomplete suggestions for a city name or postal code."""
     q = q.strip()
     lng = normalize_lang(lang)
-    cache_key = f"geocode::{q.lower()}::{count}::{lng}"
+    cache_key = f"geocode::{q.lower()}::{count}::{lng}::fr-priority"
     cached = cache.get(cache_key)
     if cached:
         return cached
@@ -202,15 +204,16 @@ async def discover(
     # ── City-name path (geocodes on the server, backward-compatible) ──
     else:
         effective_city = (city or "").strip() or settings.DEFAULT_CITY
+        effective_country = (country or "").strip() or settings.DEFAULT_COUNTRY
         cache_key = (
             f"discover::{effective_city.lower()}::"
-            f"{(country or '').lower().strip()}::{oa_tag}::{lng}"
+            f"{effective_country.lower()}::{oa_tag}::{lng}"
         )
         cached = cache.get(cache_key)
         if cached:
             return cached
         try:
-            place = await geocode_city(effective_city, country, lang=lng)
+            place = await geocode_city(effective_city, effective_country, lang=lng)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
         except Exception:

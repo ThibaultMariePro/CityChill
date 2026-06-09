@@ -5,14 +5,72 @@ Uses Open-Meteo geocoding worldwide and geo.api.gouv.fr for French postcodes.
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from app.config import settings
 from app.i18n import city_not_found, normalize_lang
 from app.models import Place, PlaceSuggestion
 from app.providers.http import build_client
 
-_FR_POSTCODE_API = "https://geo.api.gouv.fr/communes"
+_FR_COMMUNES_API = "https://geo.api.gouv.fr/communes"
 _POSTCODE_RE = re.compile(r"^\d{4,6}$")
+_FR_COUNTRY_NAMES = frozenset({"france", "frankreich", "francia", "frankrijk"})
+
+
+def _is_french_result(result: dict) -> bool:
+    if (result.get("country_code") or "").upper() == "FR":
+        return True
+    return (result.get("country") or "").strip().lower() in _FR_COUNTRY_NAMES
+
+
+def _normalize_geocode_name(name: str) -> str:
+    name = name.strip().lower()
+    name = unicodedata.normalize("NFD", name)
+    return "".join(c for c in name if unicodedata.category(c) != "Mn")
+
+
+def _geocode_result_score(
+    result: dict, query: str, *, preferred_country: str | None
+) -> tuple[int, int, int, int, int]:
+    """Rank Open-Meteo hits: France first, then preferred country, name match, population."""
+    name = _normalize_geocode_name(result.get("name") or "")
+    q = _normalize_geocode_name(query)
+    country = (result.get("country") or "").lower()
+    pref = (preferred_country or settings.DEFAULT_COUNTRY or "").strip().lower()
+
+    exact = name == q
+    prefix = name.startswith(q) or q.startswith(name) or q in name
+    country_pref = bool(pref and country == pref)
+    pop = int(result.get("population") or 0)
+
+    return (
+        1 if _is_french_result(result) else 0,
+        1 if country_pref else 0,
+        1 if exact else 0,
+        1 if prefix else 0,
+        pop,
+    )
+
+
+def _pick_geocode_result(
+    results: list[dict], query: str, country: str | None = None
+) -> dict:
+    preferred = (country or "").strip() or settings.DEFAULT_COUNTRY
+    return max(
+        results,
+        key=lambda r: _geocode_result_score(r, query, preferred_country=preferred),
+    )
+
+
+def _sort_geocode_results(
+    results: list[dict], query: str, country: str | None = None
+) -> list[dict]:
+    preferred = (country or "").strip() or settings.DEFAULT_COUNTRY
+    return sorted(
+        results,
+        key=lambda r: _geocode_result_score(r, query, preferred_country=preferred),
+        reverse=True,
+    )
 
 
 def _make_pin_id(lat: float, lon: float) -> str:
@@ -54,7 +112,7 @@ async def geocode_postcode(postcode: str) -> PlaceSuggestion | None:
         try:
             async with build_client() as client:
                 resp = await client.get(
-                    _FR_POSTCODE_API,
+                    _FR_COMMUNES_API,
                     params={
                         "codePostal": clean,
                         "fields": "nom,code,codesPostaux,centre",
@@ -92,7 +150,7 @@ async def geocode_postcode(postcode: str) -> PlaceSuggestion | None:
         resp.raise_for_status()
         data = resp.json()
 
-    for r in data.get("results") or []:
+    for r in _sort_geocode_results(data.get("results") or [], clean):
         lat, lon = r.get("latitude"), r.get("longitude")
         if lat is None or lon is None:
             continue
@@ -146,19 +204,133 @@ def _suggestion_from_result(r: dict, *, kind: str, postcode: str | None = None) 
     )
 
 
-async def search_places(query: str, count: int = 8, *, lang: str = "en") -> list[PlaceSuggestion]:
-    """Return geocoding suggestions for *query* (city name or postal code)."""
-    q = query.strip()
-    if not q:
+def _admin_name(value) -> str | None:
+    if isinstance(value, dict):
+        return value.get("nom") or value.get("name")
+    return value if isinstance(value, str) else None
+
+
+def _suggestion_from_commune(commune: dict) -> PlaceSuggestion | None:
+    centre = commune.get("centre") or {}
+    coords = centre.get("coordinates") or []
+    if len(coords) < 2:
+        return None
+
+    lon, lat = float(coords[0]), float(coords[1])
+    postcodes = _clean_postcodes(commune.get("codesPostaux") or [])
+    name = commune.get("nom") or ""
+    dept = _admin_name(commune.get("departement"))
+    region = _admin_name(commune.get("region"))
+
+    if len(postcodes) > 1:
+        kind = "area"
+        pin_id = f"area:{_make_pin_id(lat, lon)}"
+        postcode = None
+    elif len(postcodes) == 1:
+        kind = "postcode"
+        pin_id = _make_postcode_pin_id(postcodes[0])
+        postcode = postcodes[0]
+    else:
+        kind = "place"
+        pin_id = _make_pin_id(lat, lon)
+        postcode = None
+
+    display = ", ".join(p for p in [name, dept or region, "France"] if p)
+
+    return PlaceSuggestion(
+        id=pin_id,
+        kind=kind,
+        postcode=postcode,
+        name=name,
+        display=display,
+        country="France",
+        country_code="FR",
+        admin1=region,
+        latitude=lat,
+        longitude=lon,
+        timezone="Europe/Paris",
+        population=commune.get("population"),
+        postcodes=postcodes,
+    )
+
+
+async def _search_french_communes(query: str, limit: int) -> list[PlaceSuggestion]:
+    """French commune directory — primary source for the search autocomplete."""
+    try:
+        async with build_client() as client:
+            resp = await client.get(
+                _FR_COMMUNES_API,
+                params={
+                    "nom": query,
+                    "fields": "nom,code,codesPostaux,centre,population,departement,region",
+                    "boost": "population",
+                    "limit": min(limit, 15),
+                },
+            )
+            resp.raise_for_status()
+            communes = resp.json()
+    except Exception:
         return []
 
-    # Direct postal-code lookup — one precise suggestion per code.
-    if _looks_like_postcode(q):
-        resolved = await geocode_postcode(q)
-        return [resolved] if resolved else []
+    ranked = sorted(
+        communes,
+        key=lambda c: _geocode_result_score(
+            {
+                "name": c.get("nom"),
+                "country": "France",
+                "country_code": "FR",
+                "population": c.get("population") or 0,
+            },
+            query,
+            preferred_country="France",
+        ),
+        reverse=True,
+    )
 
+    suggestions: list[PlaceSuggestion] = []
+    seen_ids: set[str] = set()
+    for commune in ranked:
+        suggestion = _suggestion_from_commune(commune)
+        if not suggestion or suggestion.id in seen_ids:
+            continue
+        seen_ids.add(suggestion.id)
+        suggestions.append(suggestion)
+    return suggestions
+
+
+def _suggestion_location_key(suggestion: PlaceSuggestion) -> str:
+    return f"{suggestion.latitude:.2f},{suggestion.longitude:.2f}"
+
+
+def _merge_suggestions(
+    primary: list[PlaceSuggestion],
+    extra: list[PlaceSuggestion],
+    *,
+    limit: int,
+) -> list[PlaceSuggestion]:
+    seen_ids: set[str] = set()
+    seen_locations: set[str] = set()
+    merged: list[PlaceSuggestion] = []
+
+    for suggestion in primary + extra:
+        if suggestion.id in seen_ids:
+            continue
+        loc = _suggestion_location_key(suggestion)
+        if loc in seen_locations:
+            continue
+        seen_ids.add(suggestion.id)
+        seen_locations.add(loc)
+        merged.append(suggestion)
+        if len(merged) >= limit:
+            break
+    return merged
+
+
+async def _search_openmeteo_places(
+    query: str, count: int, *, lang: str = "en"
+) -> list[PlaceSuggestion]:
     params = {
-        "name": q,
+        "name": query,
         "count": min(count, 15),
         "language": normalize_lang(lang),
         "format": "json",
@@ -170,7 +342,7 @@ async def search_places(query: str, count: int = 8, *, lang: str = "en") -> list
 
     suggestions: list[PlaceSuggestion] = []
     seen_ids: set[str] = set()
-    for r in data.get("results") or []:
+    for r in _sort_geocode_results(data.get("results") or [], query):
         lat, lon = r.get("latitude"), r.get("longitude")
         if lat is None or lon is None:
             continue
@@ -191,16 +363,36 @@ async def search_places(query: str, count: int = 8, *, lang: str = "en") -> list
         seen_ids.add(pin_id)
 
         postcode = postcodes[0] if len(postcodes) == 1 else None
-        suggestions.append(
-            _suggestion_from_result(r, kind=kind, postcode=postcode if kind == "postcode" else None)
+        suggestion = _suggestion_from_result(
+            r, kind=kind, postcode=postcode if kind == "postcode" else None
         )
-        # Overwrite id/kind for multi-postcode areas.
         if len(postcodes) > 1:
-            suggestions[-1] = suggestions[-1].model_copy(
+            suggestion = suggestion.model_copy(
                 update={"id": pin_id, "kind": "area", "postcode": None, "postcodes": postcodes}
             )
-
+        suggestions.append(suggestion)
     return suggestions
+
+
+async def search_places(query: str, count: int = 8, *, lang: str = "en") -> list[PlaceSuggestion]:
+    """Return geocoding suggestions for *query* (city name or postal code)."""
+    q = query.strip()
+    if not q:
+        return []
+
+    # Direct postal-code lookup — one precise suggestion per code.
+    if _looks_like_postcode(q):
+        resolved = await geocode_postcode(q)
+        return [resolved] if resolved else []
+
+    french = await _search_french_communes(q, count)
+    if len(french) >= count:
+        return french[:count]
+
+    international = await _search_openmeteo_places(
+        q, max(count - len(french), count), lang=lang
+    )
+    return _merge_suggestions(french, international, limit=count)
 
 
 async def geocode_city(city: str, country: str | None = None, *, lang: str = "en") -> Place:
@@ -219,12 +411,7 @@ async def geocode_city(city: str, country: str | None = None, *, lang: str = "en
     if not results:
         raise ValueError(city_not_found(city, lang))
 
-    chosen = results[0]
-    if country:
-        for r in results:
-            if (r.get("country") or "").lower() == country.lower():
-                chosen = r
-                break
+    chosen = _pick_geocode_result(results, city, country)
 
     osm_url = (
         f"https://www.openstreetmap.org/#map=13/"
