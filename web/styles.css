@@ -101,6 +101,11 @@ a { color: inherit; }
 .brand__name { font-family: var(--font-display); font-weight: 700; font-size: 1.35rem; color: var(--text); }
 .brand__accent { color: var(--coral); }
 
+@keyframes search-idle-gradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
 .search {
   flex: 1;
   display: flex;
@@ -114,8 +119,81 @@ a { color: inherit; }
   max-width: 560px;
   margin: 0 auto;
   position: relative; /* anchor for autocomplete dropdown */
+  isolation: isolate;
+  transition: border-color 0.35s ease, box-shadow 0.35s ease;
 }
-.search:focus-within { box-shadow: var(--ring); border-color: var(--coral); }
+
+/* Idle: empty input, not focused — animated brand gradient border + soft fill */
+.search::before,
+.search::after {
+  content: "";
+  position: absolute;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+
+.search::before {
+  inset: -1px;
+  z-index: 0;
+  background: linear-gradient(
+    120deg,
+    var(--coral),
+    var(--amber),
+    var(--teal),
+    var(--plum),
+    var(--rose),
+    var(--coral)
+  );
+  background-size: 320% 320%;
+}
+
+.search::after {
+  inset: 1px;
+  z-index: 0;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--surface) 88%, var(--coral)),
+    color-mix(in srgb, var(--surface) 92%, var(--teal)),
+    color-mix(in srgb, var(--surface) 90%, var(--plum)),
+    color-mix(in srgb, var(--surface) 94%, var(--amber))
+  );
+  background-size: 280% 280%;
+}
+
+.search:has(.search__input:placeholder-shown):not(:focus-within) {
+  border-color: transparent;
+}
+
+.search:has(.search__input:placeholder-shown):not(:focus-within)::before,
+.search:has(.search__input:placeholder-shown):not(:focus-within)::after {
+  opacity: 1;
+  animation: search-idle-gradient 14s ease-in-out infinite;
+}
+
+.search > * {
+  position: relative;
+  z-index: 1;
+}
+
+.search:focus-within {
+  box-shadow: var(--ring);
+  border-color: var(--coral);
+}
+
+.search:focus-within::before,
+.search:focus-within::after {
+  opacity: 0;
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search::before,
+  .search::after {
+    animation: none !important;
+  }
+}
 
 /* ===================== Autocomplete dropdown ===================== */
 .autocomplete {
@@ -123,6 +201,7 @@ a { color: inherit; }
   top: calc(100% + 8px);
   left: 0;
   right: 0;
+  z-index: 5;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -651,6 +730,21 @@ a { color: inherit; }
   font-size: 1.25rem;
   flex-shrink: 0;
   filter: drop-shadow(0 1px 4px rgba(0,0,0,.3));
+}
+.card__curated-hint {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  font-size: .68rem;
+  line-height: 1;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .2);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
+  cursor: help;
+  opacity: .92;
 }
 .card__kind {
   position: relative; z-index: 1;

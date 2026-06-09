@@ -414,6 +414,11 @@
     $("#agenda-count").textContent = Object.keys(agenda()).length;
   }
 
+  const isCuratedEvent = (item) =>
+    item.kind === "event"
+    && (item.tags || []).includes("curated")
+    && !(item.tags || []).includes("openagenda");
+
   /* ── card ────────────────────────────────────────────────────────────── */
   function card(item) {
     const meta = catMeta(item.category);
@@ -422,11 +427,15 @@
 
     const media = el("div", `card__media cat-${esc(item.category)}`);
     const keyword = itemKeyword(item);
+    const curatedHint = isCuratedEvent(item)
+      ? `<span class="card__curated-hint" title="${esc(t("card.curatedHint"))}" aria-label="${esc(t("card.curatedHint"))}">ℹ️</span>`
+      : "";
     media.innerHTML = `
       <div class="card__topbar">
         <div class="card__header">
           <span class="card__emoji" aria-hidden="true">${meta.emoji}</span>
           <p class="card__keyword">${esc(keyword)}</p>
+          ${curatedHint}
         </div>
         <button class="card__fav ${isFav(item.id) ? "is-active" : ""}" title="${esc(t("card.fav"))}" aria-label="${esc(t("card.fav"))}">
           ${isFav(item.id) ? "❤️" : "🤍"}
