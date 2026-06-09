@@ -967,6 +967,42 @@
     return values;
   }
 
+  async function clearCachedResults() {
+    if (!window.confirm(t("params.cache.confirm"))) return;
+
+    let serverOk = true;
+    try {
+      const res = await fetch(`${API}/api/cache/clear`, { method: "POST" });
+      serverOk = res.ok;
+    } catch {
+      serverOk = false;
+    }
+
+    state.pinData = {};
+    localStorage.removeItem(LS.dismissedNotices);
+
+    toast(serverOk ? t("toast.cacheCleared") : t("toast.cacheClearFail"));
+
+    if (state.pins.length) {
+      await reloadSelection();
+      setTab("discover");
+    } else {
+      renderWarnings();
+      renderActivePanel();
+    }
+  }
+
+  function resetAgendaAndFavorites() {
+    if (!window.confirm(t("params.reset.confirm"))) return;
+
+    localStorage.removeItem(LS.favorites);
+    localStorage.removeItem(LS.agenda);
+    refreshCounts();
+    updateAgendaExportBar();
+    renderActivePanel();
+    toast(t("toast.resetDone"));
+  }
+
   function renderActivePanel() {
     if (state.tab === "discover") renderDiscover();
     else if (state.tab === "warnings") renderWarnings();
@@ -1628,6 +1664,14 @@
       });
       toast(t("toast.keysCleared"));
       if (state.pins.length) await reloadSelection();
+    });
+
+    $("#params-clear-cache").addEventListener("click", () => {
+      clearCachedResults();
+    });
+
+    $("#params-reset-data").addEventListener("click", () => {
+      resetAgendaAndFavorites();
     });
   }
 

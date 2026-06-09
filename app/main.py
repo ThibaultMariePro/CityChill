@@ -75,6 +75,13 @@ def _attach_weather(items: list[Item], weather) -> None:
         )
 
 
+@app.post("/api/cache/clear")
+async def clear_cache() -> dict:
+    """Flush the in-memory API response cache (discover, geocode, …)."""
+    removed = cache.clear()
+    return {"cleared": removed}
+
+
 @app.get("/api/health")
 async def health() -> dict:
     return {

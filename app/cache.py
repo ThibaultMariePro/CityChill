@@ -31,6 +31,13 @@ class TTLCache:
         with self._lock:
             self._store[key] = (time.time() + self._ttl, value)
 
+    def clear(self) -> int:
+        """Drop every cached entry. Returns how many keys were removed."""
+        with self._lock:
+            count = len(self._store)
+            self._store.clear()
+            return count
+
     async def get_or_set(self, key: str, factory: Callable[[], Awaitable[Any]]) -> Any:
         cached = self.get(key)
         if cached is not None:

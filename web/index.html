@@ -132,6 +132,14 @@
           <div id="palette-grid" class="palette-grid" role="radiogroup" data-i18n-aria="params.theme.aria" aria-label="Color theme"></div>
         </div>
         <div id="params-fields" class="params__fields"></div>
+        <div id="params-data" class="params-theme">
+          <h3 class="params-theme__title" data-i18n="params.data.title">Data &amp; cache</h3>
+          <p class="params-theme__desc" data-i18n="params.data.desc">Clear stored discover results or reset your saved agenda and favorites on this device.</p>
+          <div class="params__actions params__actions--inline">
+            <button type="button" class="btn btn--ghost" id="params-clear-cache" data-i18n="params.data.clearCache">Clear cached results</button>
+            <button type="button" class="btn btn--ghost btn--danger" id="params-reset-data" data-i18n="params.data.reset">Reset agenda &amp; favorites</button>
+          </div>
+        </div>
         <div class="params__actions">
           <button type="submit" class="btn btn--primary" data-i18n="params.save">Save &amp; refresh</button>
           <button type="button" class="btn btn--ghost" id="params-clear" data-i18n="params.clear">Clear keys</button>
