@@ -514,6 +514,37 @@ def _has_openagenda_key(openagenda_key: str | None = None) -> bool:
     return bool((openagenda_key or "").strip() or settings.OPENAGENDA_KEY)
 
 
+def _resolve_openagenda_key(openagenda_key: str | None = None) -> str | None:
+    key = (openagenda_key or "").strip() or (settings.OPENAGENDA_KEY or "")
+    return key or None
+
+
+async def verify_openagenda_key(openagenda_key: str | None = None) -> dict[str, bool]:
+    """Check that the configured OpenAgenda key is accepted by their API."""
+    key = _resolve_openagenda_key(openagenda_key)
+    if not key:
+        return {"configured": False, "valid": False}
+
+    try:
+        async with build_client(timeout=10) as client:
+            resp = await client.get(
+                f"{_OA_BASE_URL}/agendas",
+                headers=_oa_headers(key),
+                params=[("size", "1")],
+            )
+            if _is_rejected_api_key(resp):
+                return {"configured": True, "valid": False}
+            if resp.status_code >= 400:
+                logger.warning(
+                    "OpenAgenda key check returned HTTP %s", resp.status_code
+                )
+                return {"configured": True, "valid": False}
+            return {"configured": True, "valid": True}
+    except Exception as exc:
+        logger.warning("OpenAgenda key verification failed: %s", exc)
+        return {"configured": True, "valid": False}
+
+
 async def get_events(
     place: Place,
     *,

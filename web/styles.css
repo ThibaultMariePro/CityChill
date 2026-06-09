@@ -98,6 +98,14 @@ a { color: inherit; }
 }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; flex-shrink: 0; }
 .brand__logo { display: block; }
+.api-status {
+  font-size: .72rem;
+  line-height: 1;
+  flex-shrink: 0;
+  cursor: help;
+  transition: opacity .2s ease;
+}
+.api-status.is-checking { opacity: .55; }
 .brand__name { font-family: var(--font-display); font-weight: 700; font-size: 1.35rem; color: var(--text); }
 .brand__accent { color: var(--coral); }
 

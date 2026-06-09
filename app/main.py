@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -24,7 +25,7 @@ from app.i18n import (
 from app.config import settings
 from app.models import DiscoverResponse, Item, Place, Weather, WeatherHint
 from app.providers.activities import get_activities
-from app.providers.events import get_events
+from app.providers.events import get_events, verify_openagenda_key
 from app.providers.geocode import _make_pin_id, geocode_city, search_places
 from app.providers.weather import get_weather
 from app.theme import active_palette, generate_css, list_palettes
@@ -83,12 +84,27 @@ async def clear_cache() -> dict:
 
 
 @app.get("/api/health")
-async def health() -> dict:
+async def health(
+    openagenda_key: str | None = Query(default=None, max_length=200),
+) -> dict:
+    """Liveness plus OpenAgenda key validation (cached ~20s per key)."""
+    oa_tag = _openagenda_cache_tag(openagenda_key)
+    oa_bucket = int(time.time() // 20)
+    oa_cache_key = f"health::oa::{oa_tag}::{oa_bucket}"
+    cached_oa = cache.get(oa_cache_key)
+    if cached_oa is None:
+        oa = await verify_openagenda_key(openagenda_key)
+        cache.set(oa_cache_key, oa)
+    else:
+        oa = cached_oa
+
     return {
         "status": "ok",
         "app": settings.APP_NAME,
         "version": __version__,
         "openagenda_enabled": bool(settings.OPENAGENDA_KEY),
+        "openagenda": oa,
+        "connection_ok": bool(oa.get("configured") and oa.get("valid")),
         "default_country": settings.DEFAULT_COUNTRY,
         "default_city": settings.DEFAULT_CITY,
     }

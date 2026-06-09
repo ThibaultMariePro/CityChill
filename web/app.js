@@ -901,14 +901,87 @@
     return sp;
   }
 
-  async function loadAppConfig() {
+  let healthDebounceTimer = null;
+  let healthRetryTimer = null;
+  let healthInFlight = false;
+  let lastHealthAt = 0;
+  const HEALTH_DEBOUNCE_MS = 350;
+  const HEALTH_MIN_INTERVAL_MS = 2000;
+
+  function renderApiStatus(data) {
+    const el = $("#api-status");
+    if (!el) return;
+    if (data?.checking) {
+      el.classList.add("is-checking");
+      return;
+    }
+    el.classList.remove("is-checking");
+
+    let ok = false;
+    let titleKey = "status.keyFail";
+    if (data === null) {
+      titleKey = "status.apiDown";
+    } else if (data.connection_ok) {
+      ok = true;
+      titleKey = "status.ok";
+    } else if (!data.openagenda?.configured) {
+      titleKey = "status.keyFail";
+    } else {
+      titleKey = "status.keyFail";
+    }
+
+    el.textContent = ok ? "🟢" : "🔴";
+    el.dataset.state = ok ? "ok" : "error";
+    el.title = t(titleKey);
+    el.setAttribute("aria-label", el.title);
+  }
+
+  async function checkApiHealth({ force = false } = {}) {
+    const now = Date.now();
+    if (!force && now - lastHealthAt < HEALTH_MIN_INTERVAL_MS) {
+      clearTimeout(healthRetryTimer);
+      healthRetryTimer = setTimeout(
+        () => checkApiHealth({ force: true }),
+        HEALTH_MIN_INTERVAL_MS - (now - lastHealthAt)
+      );
+      return;
+    }
+    if (healthInFlight) return;
+
+    healthInFlight = true;
+    renderApiStatus({ checking: true });
     try {
-      const res = await fetch(`${API}/api/health`);
-      if (!res.ok) return;
+      const sp = appendApiKeysToSearchParams(new URLSearchParams());
+      const res = await fetch(`${API}/api/health?${sp}`);
+      if (!res.ok) throw new Error("health failed");
       const data = await res.json();
       if (data.default_country) defaultCountry = data.default_country;
-      state.openagendaEnabled = Boolean(data.openagenda_enabled);
-    } catch { /* offline */ }
+      state.openagendaEnabled = Boolean(
+        data.openagenda_enabled || data.openagenda?.configured
+      );
+      renderApiStatus(data);
+      renderLiveEventsToggle();
+    } catch {
+      renderApiStatus(null);
+    } finally {
+      lastHealthAt = Date.now();
+      healthInFlight = false;
+    }
+  }
+
+  function scheduleHealthCheck() {
+    clearTimeout(healthDebounceTimer);
+    healthDebounceTimer = setTimeout(() => checkApiHealth(), HEALTH_DEBOUNCE_MS);
+  }
+
+  function wireHealthChecks() {
+    const handler = () => scheduleHealthCheck();
+    document.querySelector("header.topbar")?.addEventListener("click", handler);
+    document.querySelector("header.topbar")?.addEventListener("change", handler);
+    document.querySelector("header.topbar")?.addEventListener("submit", handler);
+    document.querySelector("main.layout")?.addEventListener("click", handler);
+    document.querySelector("main.layout")?.addEventListener("change", handler);
+    document.querySelector("main.layout")?.addEventListener("submit", handler);
   }
 
   function hasOpenAgendaKey() {
@@ -1883,6 +1956,7 @@
       saveParams(collectParamsFromForm());
       toast(t("toast.paramsSaved"));
       renderLiveEventsToggle();
+      checkApiHealth({ force: true });
       if (state.pins.length) {
         await reloadSelection();
         setTab("discover");
@@ -1896,6 +1970,7 @@
         if (input) input.value = "";
       });
       renderLiveEventsToggle();
+      checkApiHealth({ force: true });
       toast(t("toast.keysCleared"));
       if (state.pins.length) await reloadSelection();
     });
@@ -1907,6 +1982,8 @@
     $("#params-reset-data").addEventListener("click", () => {
       resetAgendaAndFavorites();
     });
+
+    wireHealthChecks();
   }
 
   /* ── init ────────────────────────────────────────────────────────────── */
@@ -1936,6 +2013,7 @@
     applyTheme(theme);
 
     wire();
+    checkApiHealth({ force: true });
     renderTimeFilter();
     refreshCounts();
     updateAgendaExportBar();
@@ -1943,7 +2021,7 @@
     state.filters.liveEventsOnly = localStorage.getItem(LS.liveEventsOnly) === "1";
     renderLiveEventsToggle();
 
-    Promise.all([loadAppConfig(), loadThemePalettes(), loadKeySpecs()]).then(() => {
+    Promise.all([loadThemePalettes(), loadKeySpecs()]).then(() => {
       const savedPal = readString(LS.palette);
       if (savedPal && state.themePalettes.some((p) => p.id === savedPal)) {
         applyPalette(savedPal, { save: false });
