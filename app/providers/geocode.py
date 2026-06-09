@@ -234,6 +234,8 @@ async def geocode_city(city: str, country: str | None = None, *, lang: str = "en
         name=chosen.get("name", city),
         country=chosen.get("country"),
         admin=chosen.get("admin1"),
+        admin2=chosen.get("admin2"),
+        admin3=chosen.get("admin3"),
         latitude=chosen["latitude"],
         longitude=chosen["longitude"],
         timezone=chosen.get("timezone"),

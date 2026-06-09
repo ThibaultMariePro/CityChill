@@ -107,6 +107,42 @@ def wmo_summary(weather_code: int, lang: str | None = None) -> str:
     return labels.get(weather_code, WMO_LABELS["en"].get(weather_code, "Unknown"))
 
 
+def notice_openagenda_auth_failed(lang: str | None = None) -> str:
+    if normalize_lang(lang) == "fr":
+        return (
+            "Clé OpenAgenda refusée par l'API. Vérifiez la clé dans Paramètres "
+            "(ou la variable OPENAGENDA_KEY côté serveur)."
+        )
+    return (
+        "OpenAgenda rejected the API key. Check your key in Parameters "
+        "(or the OPENAGENDA_KEY server environment variable)."
+    )
+
+
+def notice_openagenda_fallback(city: str, lang: str | None = None) -> str:
+    if normalize_lang(lang) == "fr":
+        return (
+            f"OpenAgenda n'a renvoyé aucun événement en direct pour {city}. "
+            "Affichage des temps forts CityChilly à la place."
+        )
+    return (
+        f"OpenAgenda returned no live events for {city}. "
+        "Showing CityChilly curated highlights instead."
+    )
+
+
+def notice_openagenda_no_results(city: str, lang: str | None = None) -> str:
+    if normalize_lang(lang) == "fr":
+        return (
+            f"OpenAgenda n'a renvoyé aucun événement en direct pour {city} "
+            "et aucun temps fort CityChilly n'est disponible pour cette ville."
+        )
+    return (
+        f"OpenAgenda returned no live events for {city} and CityChilly has "
+        "no curated highlights for this city yet."
+    )
+
+
 def notice_curated_highlights(lang: str | None = None) -> str:
     if normalize_lang(lang) == "fr":
         return (

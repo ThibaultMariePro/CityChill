@@ -9,19 +9,41 @@ Both fail soft and always return clickable source URLs.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import logging
+import math
+import re
 import unicodedata
 from datetime import date, timedelta
 from pathlib import Path
 
 from app.categories import category_keyword, is_known_category
 from app.config import settings
-from app.i18n import normalize_lang, notice_curated_highlights, notice_no_event_feed
+from app.i18n import (
+    normalize_lang,
+    notice_curated_highlights,
+    notice_no_event_feed,
+    notice_openagenda_auth_failed,
+    notice_openagenda_fallback,
+    notice_openagenda_no_results,
+)
 from app.models import Item, Place
 from app.providers.http import build_client
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+logger = logging.getLogger("citychilly")
+
+_POSTCODE_DISPLAY_RE = re.compile(r"^\d{4,6}\s*·\s*(.+)$", re.UNICODE)
+_OA_BASE_URL = "https://api.openagenda.com/v2"
+_OA_MAX_AGENDAS = 30
+_OA_MAX_EVENTS = 80
+_OA_FETCH_CONCURRENCY = 8
+
+
+class OpenAgendaAuthError(Exception):
+    """Raised when OpenAgenda rejects the API key."""
 
 
 def _make_id(value: str) -> str:
@@ -87,8 +109,63 @@ def _localized_curated(raw: dict, field: str, lang: str) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _curated_events(place: Place, *, lang: str = "en") -> list[Item]:
-    dataset = _load_curated(place.name)
+def _extract_city_name(display: str) -> str:
+    """Strip a postcode prefix from display names like '44100 · Nantes'."""
+    display = (display or "").strip()
+    if " · " in display:
+        left, right = display.split(" · ", 1)
+        if left.strip().isdigit() and 4 <= len(left.strip()) <= 6:
+            return right.strip()
+    match = _POSTCODE_DISPLAY_RE.match(display)
+    if match:
+        return match.group(1).strip()
+    return display
+
+
+def _city_for_events(place: Place, city_name: str | None = None) -> str:
+    if city_name and city_name.strip():
+        return city_name.strip()
+    return _extract_city_name(place.name)
+
+
+def _city_name_variants(city: str) -> list[str]:
+    """OpenAgenda city filters may differ on accents or punctuation."""
+    variants: list[str] = []
+    seen: set[str] = set()
+    for candidate in (city, city.replace("-", " ")):
+        folded = unicodedata.normalize("NFD", candidate)
+        ascii_name = "".join(c for c in folded if unicodedata.category(c) != "Mn")
+        for value in (candidate, ascii_name):
+            key = value.strip().lower()
+            if value.strip() and key not in seen:
+                seen.add(key)
+                variants.append(value.strip())
+    return variants
+
+
+def _oa_search_terms(city: str, place: Place) -> list[str]:
+    terms: list[str] = []
+    seen: set[str] = set()
+    for candidate in [
+        city,
+        *(_city_name_variants(city)),
+        f"{city} {place.admin2}" if place.admin2 else None,
+        place.admin2,
+        place.admin3 if place.admin3 and place.admin3.lower() != city.lower() else None,
+    ]:
+        if not candidate:
+            continue
+        key = candidate.strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            terms.append(candidate.strip())
+    return terms
+
+
+def _curated_events(
+    place: Place, *, lang: str = "en", city_key: str | None = None
+) -> list[Item]:
+    dataset = _load_curated(city_key or _extract_city_name(place.name))
     if not dataset:
         return []
 
@@ -174,40 +251,175 @@ def _lang_preference(lang: str) -> tuple[str, ...]:
     return (lng, "en", "fr") if lng == "fr" else ("en", "fr")
 
 
-async def _openagenda_events(
-    place: Place, *, openagenda_key: str | None = None, lang: str = "en"
-) -> list[Item]:
-    key = (openagenda_key or "").strip() or settings.OPENAGENDA_KEY
-    if not key:
-        return []
+def _oa_headers(key: str) -> dict[str, str]:
+    return {"key": key}
+
+
+def _oa_event_params(lang: str, *, city: str | None = None, lat: float | None = None, lon: float | None = None) -> list[tuple[str, str]]:
+    params: list[tuple[str, str]] = [
+        ("size", "80"),
+        ("detailed", "1"),
+        ("monolingual", normalize_lang(lang)),
+        ("relative[]", "current"),
+        ("relative[]", "upcoming"),
+    ]
+    if city:
+        params.append(("adminLevel4[]", city))
+    if lat is not None and lon is not None:
+        lat_delta = 40.0 / 111.0
+        lon_delta = 40.0 / (111.0 * max(math.cos(math.radians(lat)), 0.2))
+        params.extend(
+            [
+                ("geo[northEast][lat]", f"{lat + lat_delta:.6f}"),
+                ("geo[northEast][lng]", f"{lon + lon_delta:.6f}"),
+                ("geo[southWest][lat]", f"{lat - lat_delta:.6f}"),
+                ("geo[southWest][lng]", f"{lon - lon_delta:.6f}"),
+            ]
+        )
+    return params
+
+
+def _is_rejected_api_key(resp) -> bool:
+    """True only when OpenAgenda rejects the key itself (not feature-gated endpoints)."""
+    if resp.status_code != 403:
+        return False
     try:
-        async with build_client() as client:
-            # 1. Find an agenda matching the city.
-            agendas = await client.get(
-                "https://api.openagenda.com/v2/agendas",
-                params={"key": key, "search": place.name, "size": 1},
-            )
-            agendas.raise_for_status()
-            results = agendas.json().get("agendas") or []
-            if not results:
-                return []
-            uid = results[0].get("uid")
-
-            # 2. Fetch current + upcoming events from that agenda.
-            evresp = await client.get(
-                f"https://api.openagenda.com/v2/agendas/{uid}/events",
-                params={
-                    "key": key,
-                    "relative[]": ["current", "upcoming"],
-                    "size": 60,
-                    "detailed": 1,
-                },
-            )
-            evresp.raise_for_status()
-            events = evresp.json().get("events") or []
+        body = resp.json()
+        msg = str(body.get("message") or body.get("error") or "").lower()
     except Exception:
-        return []
+        return False
+    return "matching key" in msg
 
+
+async def _oa_get_json(
+    client,
+    path: str,
+    key: str,
+    params: list[tuple[str, str]],
+) -> dict:
+    resp = await client.get(
+        f"{_OA_BASE_URL}{path}",
+        headers=_oa_headers(key),
+        params=params,
+    )
+    if _is_rejected_api_key(resp):
+        raise OpenAgendaAuthError()
+    if resp.status_code >= 400:
+        logger.warning(
+            "OpenAgenda %s returned HTTP %s: %s",
+            path,
+            resp.status_code,
+            resp.text[:200],
+        )
+        return {}
+    try:
+        return resp.json()
+    except Exception as exc:
+        logger.warning("OpenAgenda %s returned invalid JSON: %s", path, exc)
+        return {}
+
+
+async def _find_agenda_uids(
+    client, key: str, city: str, *, place: Place
+) -> list[int]:
+    uids: list[int] = []
+    for term in _oa_search_terms(city, place):
+        for official in ("1", None):
+            params: list[tuple[str, str]] = [
+                ("search", term),
+                ("size", str(_OA_MAX_AGENDAS)),
+            ]
+            if official:
+                params.append(("official", official))
+            payload = await _oa_get_json(client, "/agendas", key, params)
+            for agenda in payload.get("agendas") or []:
+                uid = agenda.get("uid")
+                if uid is not None and uid not in uids:
+                    uids.append(uid)
+            if len(uids) >= _OA_MAX_AGENDAS:
+                return uids[:_OA_MAX_AGENDAS]
+        if uids:
+            break
+    return uids
+
+
+async def _fetch_openagenda_raw(
+    client,
+    key: str,
+    place: Place,
+    city: str,
+    lang: str,
+) -> list[dict]:
+    lat, lon = place.latitude, place.longitude
+    seen: set[int] = set()
+    collected: list[dict] = []
+
+    def _merge(events: list[dict]) -> None:
+        nonlocal collected
+        for ev in events:
+            uid = ev.get("uid")
+            if uid is None or uid in seen:
+                continue
+            seen.add(uid)
+            collected.append(ev)
+            if len(collected) >= _OA_MAX_EVENTS:
+                return
+
+    uids = await _find_agenda_uids(client, key, city, place=place)
+    if not uids:
+        return collected
+
+    sem = asyncio.Semaphore(_OA_FETCH_CONCURRENCY)
+
+    async def _events_for(uid: int, params: list[tuple[str, str]]) -> list[dict]:
+        async with sem:
+            payload = await _oa_get_json(
+                client, f"/agendas/{uid}/events", key, params
+            )
+            return payload.get("events") or []
+
+    # Phase 1: geo around the pin — most reliable for local events.
+    geo_params = _oa_event_params(lang, lat=lat, lon=lon)
+    geo_batches = await asyncio.gather(
+        *[_events_for(uid, geo_params) for uid in uids],
+        return_exceptions=True,
+    )
+    for batch in geo_batches:
+        if isinstance(batch, BaseException):
+            logger.warning("OpenAgenda agenda fetch failed: %s", batch)
+            continue
+        _merge(batch)
+        if len(collected) >= _OA_MAX_EVENTS:
+            return collected
+
+    if collected:
+        return collected
+
+    # Phase 2: city-name filters for agendas that geo alone missed.
+    for variant in _city_name_variants(city):
+        for uid in uids:
+            for params in (
+                _oa_event_params(lang, city=variant, lat=lat, lon=lon),
+                _oa_event_params(lang, city=variant),
+            ):
+                _merge(await _events_for(uid, params))
+                if len(collected) >= _OA_MAX_EVENTS:
+                    return collected
+
+    # Experimental cross-agenda index — optional; most keys lack access.
+    for params in (
+        _oa_event_params(lang, city=city, lat=lat, lon=lon),
+        _oa_event_params(lang, lat=lat, lon=lon),
+        _oa_event_params(lang, city=city),
+    ):
+        payload = await _oa_get_json(client, "/events", key, params)
+        _merge(payload.get("events") or [])
+        if collected:
+            return collected
+    return collected
+
+
+def _oa_events_to_items(events: list[dict], place: Place, lang: str) -> list[Item]:
     prefer = _lang_preference(lang)
     items: list[Item] = []
     for ev in events:
@@ -235,7 +447,7 @@ async def _openagenda_events(
                 keyword=category_keyword(category, kind="event"),
                 description=_pick_lang(ev.get("description"), prefer=prefer),
                 image_url=(ev.get("image") or {}).get("base"),
-                location_name=location.get("name") or place.name,
+                location_name=location.get("name") or _extract_city_name(place.name),
                 latitude=location.get("latitude"),
                 longitude=location.get("longitude"),
                 start=start,
@@ -248,6 +460,34 @@ async def _openagenda_events(
         )
     items.sort(key=lambda i: i.start or "")
     return items
+
+
+async def _openagenda_events(
+    place: Place,
+    *,
+    openagenda_key: str | None = None,
+    lang: str = "en",
+    city_name: str | None = None,
+) -> tuple[list[Item], str | None]:
+    """Return (events, status). status is 'auth', 'empty', or None on success."""
+    key = (openagenda_key or "").strip() or settings.OPENAGENDA_KEY
+    if not key:
+        return [], None
+
+    city = _city_for_events(place, city_name)
+    try:
+        async with build_client() as client:
+            raw = await _fetch_openagenda_raw(client, key, place, city, lang)
+    except OpenAgendaAuthError:
+        return [], "auth"
+    except Exception as exc:
+        logger.warning("OpenAgenda fetch failed for %s: %s", city, exc)
+        return [], "empty"
+
+    items = _oa_events_to_items(raw, place, lang)
+    if items:
+        return items, None
+    return [], "empty"
 
 
 def _pick_lang(value, prefer=("en", "fr")):
@@ -273,20 +513,40 @@ def _has_openagenda_key(openagenda_key: str | None = None) -> bool:
 
 
 async def get_events(
-    place: Place, *, openagenda_key: str | None = None, lang: str = "en"
+    place: Place,
+    *,
+    openagenda_key: str | None = None,
+    lang: str = "en",
+    city_name: str | None = None,
 ) -> tuple[list[Item], list[str]]:
     """Return (events, notices)."""
     notices: list[str] = []
+    city = _city_for_events(place, city_name)
+    has_key = _has_openagenda_key(openagenda_key)
 
-    live = await _openagenda_events(place, openagenda_key=openagenda_key, lang=lang)
+    live, oa_status = await _openagenda_events(
+        place,
+        openagenda_key=openagenda_key,
+        lang=lang,
+        city_name=city,
+    )
     if live:
         return live, notices
 
-    curated = _curated_events(place, lang=lang)
+    curated = _curated_events(place, lang=lang, city_key=city)
+    if has_key:
+        if oa_status == "auth":
+            notices.append(notice_openagenda_auth_failed(lang))
+        elif curated:
+            notices.append(notice_openagenda_fallback(city, lang))
+        else:
+            notices.append(notice_openagenda_no_results(city, lang))
+    elif curated:
+        notices.append(notice_curated_highlights(lang))
+
     if curated:
-        if not _has_openagenda_key(openagenda_key):
-            notices.append(notice_curated_highlights(lang))
         return curated, notices
 
-    notices.append(notice_no_event_feed(place.name, lang))
+    if not has_key:
+        notices.append(notice_no_event_feed(city, lang))
     return [], notices

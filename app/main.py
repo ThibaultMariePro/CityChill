@@ -167,6 +167,7 @@ async def discover(
     lat: float | None = Query(default=None, ge=-90.0, le=90.0),
     lon: float | None = Query(default=None, ge=-180.0, le=180.0),
     place_name: str | None = Query(default=None, max_length=200),
+    city_name: str | None = Query(default=None, max_length=120),
     openagenda_key: str | None = Query(default=None, max_length=200),
     lang: str = Query(default="en", max_length=8),
 ) -> DiscoverResponse:
@@ -176,7 +177,11 @@ async def discover(
     # ── Coordinate-based path (skips geocoding, used by pinned locations) ──
     if lat is not None and lon is not None:
         display = place_name or f"{lat:.3f}, {lon:.3f}"
-        cache_key = f"discover::coords::{_make_pin_id(lat, lon)}::{oa_tag}::{lng}"
+        effective_city = (city_name or "").strip()
+        cache_key = (
+            f"discover::coords::{_make_pin_id(lat, lon)}::"
+            f"{effective_city.lower()}::{oa_tag}::{lng}"
+        )
         cached = cache.get(cache_key)
         if cached:
             return cached
@@ -207,7 +212,12 @@ async def discover(
     weather, activities_result, events_result = await asyncio.gather(
         get_weather(place.latitude, place.longitude, lang=lng),
         get_activities(place),
-        get_events(place, openagenda_key=openagenda_key, lang=lng),
+        get_events(
+            place,
+            openagenda_key=openagenda_key,
+            lang=lng,
+            city_name=city_name or (city or "").strip() or None,
+        ),
         return_exceptions=True,
     )
 

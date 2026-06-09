@@ -1316,11 +1316,15 @@
 
   async function fetchDiscoverForPin(pin) {
     const placeName = pin.postcode ? `${pin.postcode} · ${pin.name}` : pin.name;
-    const sp = appendLangToSearchParams(appendApiKeysToSearchParams(new URLSearchParams({
+    const params = {
       lat: String(pin.latitude),
       lon: String(pin.longitude),
       place_name: placeName,
-    })));
+    };
+    if (pin.name && pin.name !== pin.postcode) {
+      params.city_name = pin.name;
+    }
+    const sp = appendLangToSearchParams(appendApiKeysToSearchParams(new URLSearchParams(params)));
     const res = await fetch(`${API}/api/discover?${sp}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

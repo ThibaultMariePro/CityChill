@@ -8,6 +8,8 @@ class Place(BaseModel):
     name: str
     country: str | None = None
     admin: str | None = None
+    admin2: str | None = None
+    admin3: str | None = None
     latitude: float
     longitude: float
     timezone: str | None = None
