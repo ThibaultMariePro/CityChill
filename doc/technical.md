@@ -331,6 +331,7 @@ CityChill/
 | 2026-06 | **Live events only** toggle; refresh button; health indicator; Parameters tab |
 | 2026-06 | **i18n** — English / French UI and localized API notices |
 | 2026-06 | **Discover pagination** — `offset` / `limit` on `/api/discover`; **Load more** in the UI |
+| 2026-06 | **OpenAgenda metro feeds** — prioritize metropolitan agendas (e.g. [Nantes Métropole](https://openagenda.com/en/nantesmetropole)), paginate API results, raise fetch cap to 800 |
 | 2026-06 | **OpenAgenda fix** — removed `monolingual` filter so French-only cities (e.g. Nantes) work in English mode |
 | 2026-06 | **Curated expansion** — datasets for 20 French cities |
 

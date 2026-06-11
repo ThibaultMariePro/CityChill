@@ -27,3 +27,4 @@ Google search, triggered with the search button on the cards, has to be done wit
 
 Add the possibility to request for a next bunch of results. For now there is a max limit of pulled and shown elements from the api request, but it should be possible to request for more, with a next button for example. 
 
+city of the activity or event should be clearly visible on the card, add it ato the location

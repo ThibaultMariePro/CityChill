@@ -74,7 +74,7 @@ class Settings:
     DISCOVER_MAX_ACTIVITIES: int = int(
         os.getenv("CITYCHILLY_DISCOVER_MAX_ACTIVITIES", "200")
     )
-    DISCOVER_MAX_EVENTS: int = int(os.getenv("CITYCHILLY_DISCOVER_MAX_EVENTS", "200"))
+    DISCOVER_MAX_EVENTS: int = int(os.getenv("CITYCHILLY_DISCOVER_MAX_EVENTS", "800"))
 
 
 @lru_cache

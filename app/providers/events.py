@@ -39,8 +39,12 @@ logger = logging.getLogger("citychilly")
 
 _POSTCODE_DISPLAY_RE = re.compile(r"^\d{4,6}\s*·\s*(.+)$", re.UNICODE)
 _OA_BASE_URL = "https://api.openagenda.com/v2"
-_OA_MAX_AGENDAS = 30
-_OA_MAX_EVENTS = 200
+_OA_MAX_AGENDAS = 40
+_OA_MAX_EVENTS = 800
+_OA_PAGE_SIZE = 100
+_OA_MAX_PAGES = 10
+_OA_PRIMARY_METRO_AGENDA_CAP = 500
+_OA_SECONDARY_AGENDA_CAP = 60
 _OA_FETCH_CONCURRENCY = 8
 
 
@@ -163,6 +167,7 @@ def _oa_search_terms(city: str, place: Place) -> list[str]:
         f"{city} {place.admin2}" if place.admin2 else None,
         place.admin2,
         place.admin3 if place.admin3 and place.admin3.lower() != city.lower() else None,
+        *_metropole_search_terms(city),
     ]:
         if not candidate:
             continue
@@ -171,6 +176,46 @@ def _oa_search_terms(city: str, place: Place) -> list[str]:
             seen.add(key)
             terms.append(candidate.strip())
     return terms
+
+
+def _metropole_search_terms(city: str) -> list[str]:
+    """Extra agenda lookups for city-wide metropolitan calendars (e.g. Nantes Métropole)."""
+    terms: list[str] = []
+    seen: set[str] = set()
+    for candidate in [
+        f"{city} Métropole",
+        f"{city} Metropole",
+        f"Métropole de {city}",
+        f"Metropole de {city}",
+        f"métropole {city}",
+        f"metropole {city}",
+    ]:
+        key = candidate.strip().lower()
+        if key not in seen:
+            seen.add(key)
+            terms.append(candidate.strip())
+    return terms
+
+
+def _metropolis_slug_rank(agenda: dict, city: str) -> int | None:
+    """0 = primary city feed (e.g. nantesmetropole), 1 = other metro, None = skip."""
+    slug = (agenda.get("slug") or "").lower()
+    city_key = _city_file_key(city).replace("-", "")
+    slug_compact = slug.replace("-", "")
+    if slug_compact == f"{city_key}metropole":
+        return 0
+    title = agenda.get("title")
+    if isinstance(title, dict):
+        title = _pick_lang(title, prefer=("fr", "en")) or ""
+    title_low = (title or "").lower()
+    if (
+        "metropole" in slug
+        or "métropole" in slug
+        or "metropole" in title_low
+        or "métropole" in title_low
+    ):
+        return 1
+    return None
 
 
 def _curated_events(
@@ -332,10 +377,39 @@ async def _oa_get_json(
         return {}
 
 
-async def _find_agenda_uids(
+async def _find_priority_agenda_uids(
     client, key: str, city: str, *, place: Place
 ) -> list[int]:
-    uids: list[int] = []
+    """Metropolitan / city-wide official agendas (e.g. openagenda.com/…/nantesmetropole)."""
+    ranked: list[tuple[int, int]] = []
+    seen: set[int] = set()
+    for term in _metropole_search_terms(city):
+        for official in ("1", None):
+            params: list[tuple[str, str]] = [
+                ("search", term),
+                ("size", "10"),
+            ]
+            if official:
+                params.append(("official", official))
+            payload = await _oa_get_json(client, "/agendas", key, params)
+            for agenda in payload.get("agendas") or []:
+                uid = agenda.get("uid")
+                rank = _metropolis_slug_rank(agenda, city)
+                if uid is None or uid in seen or rank is None:
+                    continue
+                seen.add(uid)
+                ranked.append((rank, uid))
+    ranked.sort(key=lambda pair: pair[0])
+    return [uid for _, uid in ranked]
+
+
+async def _find_agenda_uids(
+    client, key: str, city: str, *, place: Place
+) -> tuple[list[int], list[int]]:
+    """Return (priority_metropolitan_uids, all_agenda_uids)."""
+    priority = await _find_priority_agenda_uids(client, key, city, place=place)
+    seen: set[int] = set(priority)
+    rest: list[int] = []
     for term in _oa_search_terms(city, place):
         for official in ("1", None):
             params: list[tuple[str, str]] = [
@@ -347,13 +421,12 @@ async def _find_agenda_uids(
             payload = await _oa_get_json(client, "/agendas", key, params)
             for agenda in payload.get("agendas") or []:
                 uid = agenda.get("uid")
-                if uid is not None and uid not in uids:
-                    uids.append(uid)
-            if len(uids) >= _OA_MAX_AGENDAS:
-                return uids[:_OA_MAX_AGENDAS]
-        if uids:
-            break
-    return uids
+                if uid is None or uid in seen:
+                    continue
+                seen.add(uid)
+                rest.append(uid)
+    combined = priority + rest
+    return priority, combined[:_OA_MAX_AGENDAS]
 
 
 async def _fetch_openagenda_raw(
@@ -378,32 +451,69 @@ async def _fetch_openagenda_raw(
             if len(collected) >= _OA_MAX_EVENTS:
                 return
 
-    uids = await _find_agenda_uids(client, key, city, place=place)
+    priority_uids, uids = await _find_agenda_uids(client, key, city, place=place)
     if not uids:
         return collected
 
+    priority_set = set(priority_uids)
+    other_uids = [uid for uid in uids if uid not in priority_set]
+
     sem = asyncio.Semaphore(_OA_FETCH_CONCURRENCY)
 
-    async def _events_for(uid: int, params: list[tuple[str, str]]) -> list[dict]:
+    async def _events_page(
+        uid: int, params: list[tuple[str, str]], *, page: int
+    ) -> list[dict]:
         async with sem:
+            page_params = [*params, ("page", str(page))]
             payload = await _oa_get_json(
-                client, f"/agendas/{uid}/events", key, params
+                client, f"/agendas/{uid}/events", key, page_params
             )
             return payload.get("events") or []
 
-    # Phase 1: geo around the pin — most reliable for local events.
-    geo_params = _oa_event_params(lang, lat=lat, lon=lon)
-    geo_batches = await asyncio.gather(
-        *[_events_for(uid, geo_params) for uid in uids],
-        return_exceptions=True,
-    )
-    for batch in geo_batches:
-        if isinstance(batch, BaseException):
-            logger.warning("OpenAgenda agenda fetch failed: %s", batch)
-            continue
-        _merge(batch)
+    async def _events_paginated(
+        uid: int, params: list[tuple[str, str]], *, max_events: int
+    ) -> list[dict]:
+        out: list[dict] = []
+        for page in range(1, _OA_MAX_PAGES + 1):
+            if len(out) >= max_events:
+                break
+            batch = await _events_page(uid, params, page=page)
+            if not batch:
+                break
+            out.extend(batch)
+            if len(batch) < _OA_PAGE_SIZE:
+                break
+        return out[:max_events]
+
+    async def _events_for(uid: int, params: list[tuple[str, str]]) -> list[dict]:
+        return await _events_paginated(uid, params, max_events=_OA_SECONDARY_AGENDA_CAP)
+
+    # Phase 0: metropolitan agendas first — no geo filter, paginated (city-wide feeds).
+    metro_params = _oa_event_params(lang)
+    for i, uid in enumerate(priority_uids):
+        cap = _OA_PRIMARY_METRO_AGENDA_CAP if i == 0 else _OA_SECONDARY_AGENDA_CAP
+        try:
+            batch = await _events_paginated(uid, metro_params, max_events=cap)
+            _merge(batch)
+        except Exception as exc:
+            logger.warning("OpenAgenda priority agenda %s failed: %s", uid, exc)
         if len(collected) >= _OA_MAX_EVENTS:
             return collected
+
+    # Phase 1: other agendas around the pin (capped per agenda).
+    geo_params = _oa_event_params(lang, lat=lat, lon=lon)
+    if other_uids:
+        geo_batches = await asyncio.gather(
+            *[_events_for(uid, geo_params) for uid in other_uids],
+            return_exceptions=True,
+        )
+        for batch in geo_batches:
+            if isinstance(batch, BaseException):
+                logger.warning("OpenAgenda agenda fetch failed: %s", batch)
+                continue
+            _merge(batch)
+            if len(collected) >= _OA_MAX_EVENTS:
+                return collected
 
     if collected:
         return collected
