@@ -42,6 +42,8 @@
     liveEventsOnly: "citychilly:liveEventsOnly",
     hotToday: "citychilly:hotToday",
     hotWeek: "citychilly:hotWeek",
+    zones: "citychilly:zones",
+    activeZone: "citychilly:activeZone",
   };
 
   /* ── state ───────────────────────────────────────────────────────────── */
@@ -49,6 +51,8 @@
     // Multi-pin: each entry is a lightweight PlaceSuggestion-like object
     pins:    [],   // [{id, name, display, latitude, longitude, postcodes}]
     pinData: {},   // id → DiscoverResponse (place, weather, activities, events, notices)
+    zones:   [],   // [{id, name, pins, savedAt}]
+    activeZoneId: null,
     // UI
     categories: [],
     filters: { category: "all", kind: "all", outdoorOnly: false, eventPeriod: "all", liveEventsOnly: false },
@@ -141,6 +145,92 @@
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) && parsed.length ? parsed : null;
     } catch { return null; }
+  }
+
+  function clonePin(pin) {
+    return {
+      ...pin,
+      postcodes: [...(pin.postcodes || (pin.postcode ? [pin.postcode] : []))],
+    };
+  }
+
+  function clonePins(pins) {
+    return pins.map(clonePin);
+  }
+
+  function pinsSignature(pins) {
+    return [...pins].map((p) => p.id).sort().join("|");
+  }
+
+  function readZones() {
+    try {
+      const raw = localStorage.getItem(LS.zones);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveZonesStore() {
+    localStorage.setItem(LS.zones, JSON.stringify(state.zones));
+    updateZonesCount();
+  }
+
+  function findZoneById(id) {
+    return state.zones.find((z) => z.id === id) || null;
+  }
+
+  function findZoneMatchingPins(pins) {
+    const sig = pinsSignature(pins);
+    return state.zones.find((z) => pinsSignature(z.pins) === sig) || null;
+  }
+
+  function activeZonePinIds() {
+    if (!state.activeZoneId) return null;
+    const zone = findZoneById(state.activeZoneId);
+    if (!zone) return null;
+    return new Set(zone.pins.map((p) => p.id));
+  }
+
+  function zoneCitiesLabel(zone) {
+    const names = [...new Set(zone.pins.map((p) => p.name).filter(Boolean))];
+    if (!names.length) return "";
+    const preview = names.slice(0, 5).join(", ");
+    return names.length > 5 ? `${preview}…` : preview;
+  }
+
+  function makeZoneId() {
+    return `zone-${Date.now().toString(36)}`;
+  }
+
+  function persistActiveZone() {
+    if (state.activeZoneId) {
+      localStorage.setItem(LS.activeZone, state.activeZoneId);
+    } else {
+      localStorage.removeItem(LS.activeZone);
+    }
+  }
+
+  function syncActiveZoneFromPins() {
+    if (!state.pins.length) {
+      state.activeZoneId = null;
+      persistActiveZone();
+      renderZoneFilter();
+      renderZones();
+      return;
+    }
+    const match = findZoneMatchingPins(state.pins);
+    state.activeZoneId = match?.id || null;
+    persistActiveZone();
+    renderZoneFilter();
+    renderZones();
+  }
+
+  function updateZonesCount() {
+    const node = $("#zones-count");
+    if (node) node.textContent = String(state.zones.length);
   }
 
   function savePins() {
@@ -723,9 +813,11 @@
   function allItems() {
     const seen  = new Set();
     const items = [];
+    const zoneIds = activeZonePinIds();
     const activeIds = new Set(state.pins.map((p) => p.id));
     for (const pin of state.pins) {
       if (!activeIds.has(pin.id)) continue;
+      if (zoneIds && !zoneIds.has(pin.id)) continue;
       const data = state.pinData[pin.id];
       if (!data) continue;
       for (const item of [...(data.events ?? []), ...(data.activities ?? [])]) {
@@ -1642,6 +1734,8 @@
       renderHero();
       renderPinnedChips();
       renderWarnings();
+      renderZoneFilter();
+      renderZones();
       renderActivePanel();
     });
     if (reload && state.pins.length) reloadSelection();
@@ -1780,10 +1874,263 @@
 
   function renderActivePanel() {
     if (state.tab === "discover") renderDiscover();
+    else if (state.tab === "zones") renderZones();
     else if (state.tab === "warnings") renderWarnings();
     else if (state.tab === "favorites") renderFavorites();
     else if (state.tab === "agenda") renderAgenda();
     else if (state.tab === "parameters") renderParameters();
+  }
+
+  /* ── zones ───────────────────────────────────────────────────────────── */
+  function closeZoneFilterMenu() {
+    const menu = $("#zone-filter-menu");
+    const btn = $("#zone-filter-btn");
+    if (!menu || !btn) return;
+    menu.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleZoneFilterMenu() {
+    const menu = $("#zone-filter-menu");
+    const btn = $("#zone-filter-btn");
+    if (!menu || !btn || menu.childElementCount === 0) return;
+    const open = menu.hidden;
+    menu.hidden = !open;
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    closeTimeFilterMenu();
+  }
+
+  function renderZoneFilter() {
+    const wrap = $("#zone-filter");
+    const menu = $("#zone-filter-menu");
+    const label = $("#zone-filter-label");
+    const btn = $("#zone-filter-btn");
+    if (!wrap || !menu || !label || !btn) return;
+
+    if (!state.zones.length) {
+      wrap.hidden = true;
+      menu.innerHTML = "";
+      return;
+    }
+
+    wrap.hidden = false;
+    const activeZone = state.activeZoneId ? findZoneById(state.activeZoneId) : null;
+    if (activeZone) {
+      label.textContent = activeZone.name;
+      btn.classList.add("is-active-zone");
+    } else {
+      label.textContent = t("filter.zone.custom");
+      btn.classList.remove("is-active-zone");
+    }
+
+    menu.innerHTML = "";
+    const allOpt = el("button", `zone-filter__option${!state.activeZoneId ? " is-active" : ""}`);
+    allOpt.type = "button";
+    allOpt.dataset.zoneId = "";
+    allOpt.setAttribute("role", "option");
+    allOpt.setAttribute("aria-selected", !state.activeZoneId ? "true" : "false");
+    allOpt.innerHTML = `<span>${esc(t("filter.zone.all"))}</span>`;
+    allOpt.addEventListener("click", () => selectZoneFilter(null));
+    const allLi = el("li");
+    allLi.appendChild(allOpt);
+    menu.appendChild(allLi);
+
+    state.zones.forEach((zone) => {
+      const item = el("li");
+      const opt = el(
+        "button",
+        `zone-filter__option${zone.id === state.activeZoneId ? " is-active" : ""}`
+      );
+      opt.type = "button";
+      opt.dataset.zoneId = zone.id;
+      opt.setAttribute("role", "option");
+      opt.setAttribute("aria-selected", zone.id === state.activeZoneId ? "true" : "false");
+      const cities = zoneCitiesLabel(zone);
+      opt.innerHTML = cities
+        ? `<span>${esc(zone.name)}</span><span class="zone-filter__option-sub">${esc(t("zones.pins", { count: zone.pins.length }))} · ${esc(cities)}</span>`
+        : `<span>${esc(zone.name)}</span><span class="zone-filter__option-sub">${esc(t("zones.pins", { count: zone.pins.length }))}</span>`;
+      opt.addEventListener("click", () => selectZoneFilter(zone.id));
+      item.appendChild(opt);
+      menu.appendChild(item);
+    });
+  }
+
+  async function selectZoneFilter(zoneId) {
+    closeZoneFilterMenu();
+    if (!zoneId) {
+      if (!state.activeZoneId) return;
+      state.activeZoneId = null;
+      persistActiveZone();
+      renderZoneFilter();
+      renderZones();
+      renderDiscover();
+      return;
+    }
+
+    const zone = findZoneById(zoneId);
+    if (!zone) return;
+
+    const zoneIds = new Set(zone.pins.map((p) => p.id));
+    const currentIds = new Set(state.pins.map((p) => p.id));
+    const isSuperset = [...zoneIds].every((id) => currentIds.has(id));
+
+    if (isSuperset && state.pins.length) {
+      state.activeZoneId = zoneId;
+      persistActiveZone();
+      renderZoneFilter();
+      renderZones();
+      renderDiscover();
+      return;
+    }
+
+    await loadZone(zoneId);
+  }
+
+  async function loadZone(zoneId, { reload = true, notify = true } = {}) {
+    const zone = findZoneById(zoneId);
+    if (!zone) return false;
+
+    state.pins = clonePins(zone.pins);
+    state.activeZoneId = zoneId;
+    persistActiveZone();
+    savePins();
+    renderPinnedChips();
+    renderZoneFilter();
+    renderZones();
+
+    if (reload) {
+      setTab("discover");
+      await reloadSelection();
+      if (notify) toast(t("toast.zoneLoaded", { name: zone.name }));
+    }
+    return true;
+  }
+
+  function saveZoneFromCurrent(name) {
+    if (!state.pins.length) {
+      toast(t("toast.zoneNeedsPins"));
+      return false;
+    }
+    const trimmed = String(name || "").trim();
+    if (!trimmed) {
+      toast(t("toast.zoneNameRequired"));
+      return false;
+    }
+
+    const zone = {
+      id: makeZoneId(),
+      name: trimmed,
+      pins: clonePins(state.pins),
+      savedAt: new Date().toISOString(),
+    };
+    state.zones.unshift(zone);
+    state.activeZoneId = zone.id;
+    saveZonesStore();
+    persistActiveZone();
+    renderZones();
+    renderZoneFilter();
+    const input = $("#zone-name-input");
+    if (input) input.value = "";
+    toast(t("toast.zoneSaved", { name: trimmed }));
+    return true;
+  }
+
+  function updateZoneFromCurrent(zoneId) {
+    const zone = findZoneById(zoneId);
+    if (!zone) return false;
+    if (!state.pins.length) {
+      toast(t("toast.zoneNeedsPins"));
+      return false;
+    }
+    if (!window.confirm(t("zones.updateConfirm", { name: zone.name }))) return false;
+
+    zone.pins = clonePins(state.pins);
+    zone.savedAt = new Date().toISOString();
+    state.activeZoneId = zoneId;
+    saveZonesStore();
+    persistActiveZone();
+    renderZones();
+    renderZoneFilter();
+    toast(t("toast.zoneUpdated", { name: zone.name }));
+    return true;
+  }
+
+  function deleteZone(zoneId) {
+    const zone = findZoneById(zoneId);
+    if (!zone) return false;
+    if (!window.confirm(t("zones.deleteConfirm", { name: zone.name }))) return false;
+
+    state.zones = state.zones.filter((z) => z.id !== zoneId);
+    saveZonesStore();
+
+    if (state.activeZoneId === zoneId) {
+      state.activeZoneId = null;
+      persistActiveZone();
+      clearPinSelection();
+      savePins();
+      renderPinnedChips();
+      clearResults();
+      renderActivePanel();
+    }
+
+    renderZones();
+    renderZoneFilter();
+    toast(t("toast.zoneDeleted", { name: zone.name }));
+    return true;
+  }
+
+  function renderZones() {
+    const list = $("#zones-list");
+    const empty = $("#zones-empty");
+    const saveBtn = $("#zone-save-btn");
+    const hint = $("#zone-save-hint");
+    if (!list || !empty) return;
+
+    list.innerHTML = "";
+    updateZonesCount();
+    renderZoneFilter();
+
+    const canSave = state.pins.length > 0;
+    if (saveBtn) saveBtn.disabled = !canSave;
+    if (hint) {
+      hint.textContent = canSave
+        ? t("zones.saveHint")
+        : t("toast.zoneNeedsPins");
+    }
+
+    if (!state.zones.length) {
+      empty.hidden = false;
+      return;
+    }
+    empty.hidden = true;
+
+    state.zones.forEach((zone) => {
+      const card = el("article", `zone-card${zone.id === state.activeZoneId ? " is-active" : ""}`);
+      const cities = zoneCitiesLabel(zone);
+      const info = el("div", "zone-card__info");
+      info.innerHTML = `
+        <h3 class="zone-card__name">${esc(zone.name)}</h3>
+        <p class="zone-card__meta">${esc(t("zones.pins", { count: zone.pins.length }))}</p>
+        ${cities ? `<p class="zone-card__cities">${esc(cities)}</p>` : ""}`;
+
+      const actions = el("div", "zone-card__actions");
+      const loadBtn = el("button", "btn btn--primary btn--compact", t("zones.load"));
+      loadBtn.type = "button";
+      loadBtn.addEventListener("click", () => loadZone(zone.id));
+
+      const updateBtn = el("button", "btn btn--ghost btn--compact", t("zones.update"));
+      updateBtn.type = "button";
+      updateBtn.disabled = !canSave;
+      updateBtn.addEventListener("click", () => updateZoneFromCurrent(zone.id));
+
+      const deleteBtn = el("button", "btn btn--ghost btn--compact btn--danger", t("zones.delete"));
+      deleteBtn.type = "button";
+      deleteBtn.addEventListener("click", () => deleteZone(zone.id));
+
+      actions.append(loadBtn, updateBtn, deleteBtn);
+      card.append(info, actions);
+      list.appendChild(card);
+    });
   }
 
   /* ── chips ───────────────────────────────────────────────────────────── */
@@ -1858,6 +2205,7 @@
     const menu = $("#time-filter-menu");
     const btn = $("#time-filter-btn");
     if (!menu || !btn) return;
+    closeZoneFilterMenu();
     const open = menu.hidden;
     menu.hidden = !open;
     btn.setAttribute("aria-expanded", open ? "true" : "false");
@@ -1945,6 +2293,10 @@
   function clearPinSelection() {
     state.pins = [];
     state.pinData = {};
+    state.activeZoneId = null;
+    persistActiveZone();
+    renderZoneFilter();
+    renderZones();
   }
 
   function addPin(suggestion) {
@@ -1955,6 +2307,7 @@
       return;
     }
     state.pins.push(pin);
+    syncActiveZoneFromPins();
     closeDropdown();
     $("#city-input").value = "";
     setTab("discover");
@@ -2062,6 +2415,7 @@
     if (!idSet.size) return;
     state.pins = state.pins.filter((p) => !idSet.has(p.id));
     ids.forEach((id) => delete state.pinData[id]);
+    syncActiveZoneFromPins();
     reloadSelection();
   }
 
@@ -2342,6 +2696,7 @@
       }
 
       state.eventsLoading = false;
+      syncActiveZoneFromPins();
       renderPinnedChips();
       renderHero();
       renderWeather();
@@ -2619,6 +2974,17 @@
       })
     );
 
+    $("#zone-filter-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleZoneFilterMenu();
+    });
+
+    $("#zone-save-form")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = $("#zone-name-input");
+      saveZoneFromCurrent(input?.value || "");
+    });
+
     $("#time-filter-btn")?.addEventListener("click", (e) => {
       e.stopPropagation();
       toggleTimeFilterMenu();
@@ -2630,10 +2996,14 @@
 
     document.addEventListener("click", (e) => {
       if (!e.target.closest("#time-filter")) closeTimeFilterMenu();
+      if (!e.target.closest("#zone-filter")) closeZoneFilterMenu();
     });
 
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeTimeFilterMenu();
+      if (e.key === "Escape") {
+        closeTimeFilterMenu();
+        closeZoneFilterMenu();
+      }
     });
 
     $("#discover-refresh")?.addEventListener("click", () => refreshOpenAgenda());
@@ -2779,12 +3149,27 @@
     updateAgendaExportBar();
     renderChips();
 
-    state.pins = [];
-    state.pinData = {};
-    $("#city-input").value = "";
-    clearResults();
-    renderActivePanel();
-    updateRefreshButton();
+    state.zones = readZones();
+    updateZonesCount();
+    renderZoneFilter();
+    renderZones();
+
+    const savedZoneId = readString(LS.activeZone);
+    const savedZone = savedZoneId ? state.zones.find((z) => z.id === savedZoneId) : null;
+    if (savedZone) {
+      state.activeZoneId = savedZoneId;
+      state.pins = clonePins(savedZone.pins);
+      savePins();
+      renderPinnedChips();
+      reloadSelection();
+    } else {
+      state.pins = [];
+      state.pinData = {};
+      $("#city-input").value = "";
+      clearResults();
+      renderActivePanel();
+      updateRefreshButton();
+    }
   }
 
   document.addEventListener("DOMContentLoaded", init);

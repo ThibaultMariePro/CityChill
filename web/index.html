@@ -72,6 +72,7 @@
 
     <nav class="tabs" role="tablist">
       <button class="tab is-active" data-tab="discover" role="tab" data-i18n="tab.discover">🧭 Discover</button>
+      <button class="tab" data-tab="zones" role="tab"><span data-i18n="tab.zones">📍 My zones</span> <span class="tab__count" id="zones-count">0</span></button>
       <button class="tab" data-tab="agenda" role="tab"><span data-i18n="tab.agenda">🗓️ My Agenda</span> <span class="tab__count" id="agenda-count">0</span></button>
       <button class="tab" data-tab="favorites" role="tab"><span data-i18n="tab.favorites">❤️ Favorites</span> <span class="tab__count" id="fav-count">0</span></button>
       <button class="tab" data-tab="parameters" role="tab" data-i18n="tab.parameters">⚙️ Parameters</button>
@@ -82,6 +83,23 @@
       <div class="toolbar">
         <div class="chips" id="category-chips"></div>
         <div class="toolbar__right">
+          <div class="zone-filter" id="zone-filter" hidden>
+            <button
+              type="button"
+              class="zone-filter__btn"
+              id="zone-filter-btn"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-controls="zone-filter-menu"
+              data-i18n-title="filter.zone.aria"
+              title="Filter by saved zone"
+            >
+              <span class="zone-filter__icon" aria-hidden="true">📍</span>
+              <span id="zone-filter-label" data-i18n="filter.zone.custom">Custom search</span>
+              <span class="zone-filter__chevron" aria-hidden="true">▾</span>
+            </button>
+            <ul class="zone-filter__menu" id="zone-filter-menu" role="listbox" data-i18n-aria="filter.zone.aria" aria-label="Saved zones" hidden></ul>
+          </div>
           <div class="segmented" id="kind-filter">
             <button class="seg is-active" data-kind="all" data-i18n="filter.kind.all">All</button>
             <button class="seg" data-kind="event" data-i18n="filter.kind.event">Events</button>
@@ -171,6 +189,35 @@
         </button>
       </div>
       <div class="empty" id="discover-empty" hidden></div>
+    </section>
+
+    <section class="panel" id="panel-zones" role="tabpanel">
+      <div class="panel__head">
+        <h2 data-i18n="panel.zones.title">My zones</h2>
+        <p class="panel__hint" data-i18n="panel.zones.hint">Save grouped city searches and switch between them from Discover.</p>
+      </div>
+      <form id="zone-save-form" class="zone-save" autocomplete="off">
+        <label class="zone-save__label" for="zone-name-input" data-i18n="zones.saveLabel">Zone name</label>
+        <div class="zone-save__row">
+          <input
+            id="zone-name-input"
+            class="zone-save__input"
+            type="text"
+            maxlength="80"
+            data-i18n-placeholder="zones.savePlaceholder"
+            placeholder="e.g. Pays de la Loire"
+            required
+          />
+          <button type="submit" class="btn btn--primary" id="zone-save-btn" data-i18n="zones.save">Save current pins</button>
+        </div>
+        <p class="zone-save__hint" id="zone-save-hint" data-i18n="zones.saveHint">Pin one or more cities or postal codes first, then save them as a zone.</p>
+      </form>
+      <div id="zones-list" class="zones-list"></div>
+      <div class="empty" id="zones-empty" hidden>
+        <div class="empty__emoji">📍</div>
+        <h3 data-i18n="empty.zones.title">No saved zones yet</h3>
+        <p data-i18n="empty.zones.body">Pin cities on Discover, then save the selection here for quick access later.</p>
+      </div>
     </section>
 
     <section class="panel" id="panel-agenda" role="tabpanel">
