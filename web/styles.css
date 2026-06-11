@@ -1138,15 +1138,47 @@ a { color: inherit; }
   opacity: .9;
 }
 .card__fav {
-  position: relative; z-index: 2;
+  position: relative;
+  z-index: 2;
   flex-shrink: 0;
-  width: 30px; height: 30px; border-radius: 50%;
-  border: none; cursor: pointer; font-size: .9rem;
-  background: rgba(255,255,255,.92); display: grid; place-items: center;
-  transition: transform .15s ease;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--text) 22%, var(--border));
+  cursor: pointer;
+  background: color-mix(in srgb, var(--surface) 96%, #fff);
+  color: var(--rose);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .14);
+  transition: transform .15s ease, background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
 }
-.card__fav:hover { transform: scale(1.12); }
-.card__fav.is-active { background: var(--rose); }
+.card__fav-icon {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.card__fav:hover {
+  transform: scale(1.08);
+  border-color: color-mix(in srgb, var(--rose) 55%, var(--border));
+  background: color-mix(in srgb, var(--rose) 10%, var(--surface));
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--rose) 22%, transparent);
+}
+.card__fav.is-active {
+  background: var(--rose);
+  border-color: color-mix(in srgb, var(--rose) 70%, #3a2417);
+  color: #fff;
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--rose) 50%, transparent);
+}
+.card__fav.is-active .card__fav-icon {
+  fill: currentColor;
+  stroke: currentColor;
+}
 
 .card__body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .card__title { font-family: var(--font-display); font-size: 1.24rem; font-weight: 600; margin: 0; line-height: 1.25; }
