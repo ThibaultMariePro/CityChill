@@ -69,6 +69,13 @@ class Settings:
     FORECAST_DAYS: int = min(int(os.getenv("CITYCHILLY_FORECAST_DAYS", "16")), 16)
     EVENT_HORIZON_DAYS: int = int(os.getenv("CITYCHILLY_EVENT_HORIZON_DAYS", "28"))
 
+    # Discover pagination — full upstream fetch is cached, then sliced per page.
+    DISCOVER_PAGE_SIZE: int = int(os.getenv("CITYCHILLY_DISCOVER_PAGE_SIZE", "40"))
+    DISCOVER_MAX_ACTIVITIES: int = int(
+        os.getenv("CITYCHILLY_DISCOVER_MAX_ACTIVITIES", "200")
+    )
+    DISCOVER_MAX_EVENTS: int = int(os.getenv("CITYCHILLY_DISCOVER_MAX_EVENTS", "200"))
+
 
 @lru_cache
 def get_settings() -> Settings:

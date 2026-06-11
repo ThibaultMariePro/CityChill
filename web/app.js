@@ -19,6 +19,7 @@
   const dateLocale = () => I18N.dateLocale();
 
   const API = "";
+  const DISCOVER_PAGE_SIZE = 40;
   let defaultCountry = "France";
   const LS = {
     theme:     "citychilly:theme",
@@ -45,6 +46,7 @@
     serverOpenAgendaConfigured: false,
     connectionOk: null,
     refreshInFlight: false,
+    loadMoreInFlight: false,
     oaRenderRetry: false,
     tab: "discover",
     keySpecs: [],
@@ -607,6 +609,7 @@
     empty.innerHTML = `<div class="empty__emoji">📍</div><h3>${esc(t("empty.noPins.title"))}</h3><p>${esc(t("empty.noPins.body"))}</p>`;
     $("#results-meta").textContent = t("results.zero");
     updateRefreshButton();
+    updateLoadMoreButton();
   }
 
   function allItems() {
@@ -657,6 +660,7 @@
         hint.hidden = true;
         hint.textContent = "";
       }
+      updateLoadMoreButton();
       return;
     }
 
@@ -690,8 +694,15 @@
     if (raw.live) breakdown.push(t("results.live", { count: raw.live }));
     if (raw.curated) breakdown.push(t("results.curated", { count: raw.curated }));
     if (raw.activities) breakdown.push(t("results.activities", { count: raw.activities }));
-    meta.innerHTML = breakdown.length
-      ? `${esc(headline)}<span class="results-meta__detail">${esc(breakdown.join(" · "))}</span>`
+    const loadedTotal = discoverLoadedTotal();
+    const upstreamTotal = discoverUpstreamTotal();
+    const loadDetail = upstreamTotal > loadedTotal
+      ? t("results.loadedOf", { loaded: loadedTotal, total: upstreamTotal })
+      : "";
+    const detailParts = [...breakdown];
+    if (loadDetail) detailParts.push(loadDetail);
+    meta.innerHTML = detailParts.length
+      ? `${esc(headline)}<span class="results-meta__detail">${esc(detailParts.join(" · "))}</span>`
       : esc(headline);
 
     const shownLive = items.filter((it) => isLiveEvent(it)).length;
@@ -707,13 +718,18 @@
 
     if (!items.length) {
       empty.hidden = false;
-      empty.innerHTML = `<div class="empty__emoji">🧐</div><h3>${esc(t("empty.noFilter.title"))}</h3><p>${esc(t("empty.noFilter.body"))}</p>`;
+      const moreHint = discoverHasMore()
+        ? `<p class="empty__more-hint">${esc(t("results.loadMore"))}</p>`
+        : "";
+      empty.innerHTML = `<div class="empty__emoji">🧐</div><h3>${esc(t("empty.noFilter.title"))}</h3><p>${esc(t("empty.noFilter.body"))}</p>${moreHint}`;
+      updateLoadMoreButton();
       return;
     }
     empty.hidden = true;
     const frag = document.createDocumentFragment();
     items.forEach((it) => frag.appendChild(card(it)));
     grid.appendChild(frag);
+    updateLoadMoreButton();
   }
 
   /* ── favorites ───────────────────────────────────────────────────────── */
@@ -1049,14 +1065,76 @@
     if (readParams().openagenda_key) saveParams({});
   }
 
-  function appendDiscoverParams(sp, { forDiscover = false } = {}) {
+  function appendDiscoverParams(sp, { forDiscover = false, offset = 0, limit = DISCOVER_PAGE_SIZE } = {}) {
     appendApiKeysToSearchParams(sp);
     appendLangToSearchParams(sp);
     if (defaultCountry) sp.set("country", defaultCountry);
     if (forDiscover && state.filters.liveEventsOnly) {
       sp.set("live_events_only", "1");
     }
+    if (forDiscover) {
+      sp.set("offset", String(offset));
+      sp.set("limit", String(limit));
+    }
     return sp;
+  }
+
+  function discoverLoadedCount(pinId) {
+    const data = state.pinData[pinId];
+    if (!data) return 0;
+    return (data.events?.length || 0) + (data.activities?.length || 0);
+  }
+
+  function discoverHasMore() {
+    return state.pins.some((pin) => state.pinData[pin.id]?.pagination?.has_more);
+  }
+
+  function discoverUpstreamTotal() {
+    return state.pins.reduce(
+      (sum, pin) => sum + (state.pinData[pin.id]?.pagination?.total || 0),
+      0
+    );
+  }
+
+  function discoverLoadedTotal() {
+    return state.pins.reduce((sum, pin) => sum + discoverLoadedCount(pin.id), 0);
+  }
+
+  function mergeDiscoverPage(pinId, page) {
+    const cur = state.pinData[pinId];
+    if (!cur) {
+      state.pinData[pinId] = page;
+      return;
+    }
+    const seen = new Set([
+      ...(cur.events || []).map((item) => item.id),
+      ...(cur.activities || []).map((item) => item.id),
+    ]);
+    for (const item of page.events || []) {
+      if (!seen.has(item.id)) {
+        cur.events.push(item);
+        seen.add(item.id);
+      }
+    }
+    for (const item of page.activities || []) {
+      if (!seen.has(item.id)) {
+        cur.activities.push(item);
+        seen.add(item.id);
+      }
+    }
+    if (page.pagination) cur.pagination = page.pagination;
+    if (!cur.place && page.place) cur.place = page.place;
+    if (!cur.weather?.days?.length && page.weather) cur.weather = page.weather;
+  }
+
+  function updateLoadMoreButton() {
+    const wrap = $("#discover-more");
+    const btn = $("#discover-load-more");
+    if (!wrap || !btn) return;
+    const show = state.tab === "discover" && state.pins.length && discoverHasMore();
+    wrap.hidden = !show;
+    btn.disabled = state.loadMoreInFlight || !show;
+    btn.classList.toggle("is-loading", state.loadMoreInFlight);
   }
 
   let healthDebounceTimer = null;
@@ -1874,7 +1952,7 @@
     btn.classList.toggle("is-spinning", state.refreshInFlight);
   }
 
-  async function fetchDiscoverForPin(pin, { refresh = false } = {}) {
+  async function fetchDiscoverForPin(pin, { refresh = false, offset = 0 } = {}) {
     const placeName = pin.postcode ? `${pin.postcode} · ${pin.name}` : pin.name;
     const params = {
       lat: String(pin.latitude),
@@ -1884,7 +1962,10 @@
     if (pin.name && pin.name !== pin.postcode) {
       params.city_name = pin.name;
     }
-    const sp = appendDiscoverParams(new URLSearchParams(params), { forDiscover: true });
+    const sp = appendDiscoverParams(new URLSearchParams(params), {
+      forDiscover: true,
+      offset,
+    });
     if (refresh) sp.set("refresh", "1");
     const res = await fetch(`${API}/api/discover?${sp}`);
     if (!res.ok) {
@@ -2004,6 +2085,44 @@
       return;
     }
     await reloadSelection({ refresh: true });
+  }
+
+  async function loadMoreDiscover() {
+    if (!discoverHasMore() || state.loadMoreInFlight) return;
+    await ensureApiBootstrap();
+    state.loadMoreInFlight = true;
+    updateLoadMoreButton();
+    const loadingTimer = setTimeout(() => showLoading(true, t("loading.more")), 220);
+    try {
+      const pinsToLoad = state.pins.filter((pin) => state.pinData[pin.id]?.pagination?.has_more);
+      const results = await Promise.all(
+        pinsToLoad.map(async (pin) => {
+          const pag = state.pinData[pin.id].pagination;
+          const nextOffset = (pag?.offset || 0) + (pag?.returned || 0);
+          try {
+            const data = await fetchDiscoverForPin(pin, { offset: nextOffset });
+            return { pin, data, error: null };
+          } catch (error) {
+            return { pin, data: null, error };
+          }
+        })
+      );
+      for (const { pin, data, error } of results) {
+        if (error || !data) {
+          toast(error?.message || t("toast.error"));
+          continue;
+        }
+        mergeDiscoverPage(pin.id, data);
+      }
+      renderWeather();
+      renderWarnings();
+      renderActivePanel();
+    } finally {
+      clearTimeout(loadingTimer);
+      showLoading(false);
+      state.loadMoreInFlight = false;
+      updateLoadMoreButton();
+    }
   }
 
   /** Load by city name string (legacy path & form fallback — geocodes on the server). */
@@ -2188,6 +2307,7 @@
     });
 
     $("#discover-refresh")?.addEventListener("click", () => refreshOpenAgenda());
+    $("#discover-load-more")?.addEventListener("click", () => loadMoreDiscover());
 
     $("#live-events-only")?.addEventListener("change", (e) => {
       setLiveEventsOnly(e.target.checked);

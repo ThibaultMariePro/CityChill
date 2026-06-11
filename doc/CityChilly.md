@@ -36,7 +36,8 @@ Filter everything by **category** with a single click:
 
 You can also switch between **Events / Activities / All**, filter by **time
 period**, flip **Outdoor only**, or enable **Live events only** to see only
-OpenAgenda listings (curated highlights hidden).
+OpenAgenda listings (curated highlights hidden). When there are more results
+than fit on one screen, use **Load more** to fetch the next page.
 
 ### Build your own agenda / roadmap
 

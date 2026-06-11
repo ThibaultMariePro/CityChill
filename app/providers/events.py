@@ -40,7 +40,7 @@ logger = logging.getLogger("citychilly")
 _POSTCODE_DISPLAY_RE = re.compile(r"^\d{4,6}\s*·\s*(.+)$", re.UNICODE)
 _OA_BASE_URL = "https://api.openagenda.com/v2"
 _OA_MAX_AGENDAS = 30
-_OA_MAX_EVENTS = 80
+_OA_MAX_EVENTS = 200
 _OA_FETCH_CONCURRENCY = 8
 
 
@@ -262,7 +262,7 @@ def _oa_event_params(lang: str, *, city: str | None = None, lat: float | None = 
     # Nantes and other regional cities) return title=null for monolingual=en, and
     # we would drop every event. _pick_lang() handles multilingual dicts instead.
     params: list[tuple[str, str]] = [
-        ("size", "80"),
+        ("size", "100"),
         ("detailed", "1"),
         ("relative[]", "current"),
         ("relative[]", "upcoming"),

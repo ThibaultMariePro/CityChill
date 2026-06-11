@@ -81,9 +81,20 @@ class PlaceSuggestion(BaseModel):
     postcodes: list[str] = []  # for kind=="area": selectable codes in the agglomeration
 
 
+class DiscoverPagination(BaseModel):
+    """Slice metadata when /api/discover is called with offset & limit."""
+
+    offset: int = 0
+    limit: int = 0
+    total: int = 0
+    returned: int = 0
+    has_more: bool = False
+
+
 class DiscoverResponse(BaseModel):
     place: Place
     weather: Weather
     activities: list[Item] = []
     events: list[Item] = []
     notices: list[str] = []
+    pagination: DiscoverPagination | None = None

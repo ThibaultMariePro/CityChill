@@ -24,7 +24,14 @@ from app.i18n import (
     notice_no_activities,
 )
 from app.config import settings
-from app.models import DiscoverResponse, Item, Place, Weather, WeatherHint
+from app.models import (
+    DiscoverPagination,
+    DiscoverResponse,
+    Item,
+    Place,
+    Weather,
+    WeatherHint,
+)
 from app.providers.activities import get_activities
 from app.providers.events import get_events, verify_openagenda_key
 from app.providers.geocode import _make_pin_id, geocode_city, search_places
@@ -77,6 +84,34 @@ def _normalize_client_key(openagenda_key: str | None) -> str | None:
     if not key or len(key) > _OA_KEY_MAX_LEN or not key.startswith(_OA_KEY_PREFIX):
         return None
     return key
+
+
+def _paginate_discover(
+    full: DiscoverResponse, offset: int, limit: int
+) -> DiscoverResponse:
+    """Return a page of discover items (events by date, then activities)."""
+    events = sorted(full.events, key=lambda i: (i.start or "9999-12-31", i.title.lower()))
+    merged: list[tuple[str, Item]] = [("event", e) for e in events]
+    merged.extend(("activity", a) for a in full.activities)
+    total = len(merged)
+    page = merged[offset : offset + limit]
+    page_activities = [item for kind, item in page if kind == "activity"]
+    page_events = [item for kind, item in page if kind == "event"]
+    returned = len(page)
+    return DiscoverResponse(
+        place=full.place,
+        weather=full.weather,
+        activities=page_activities,
+        events=page_events,
+        notices=full.notices if offset == 0 else [],
+        pagination=DiscoverPagination(
+            offset=offset,
+            limit=limit,
+            total=total,
+            returned=returned,
+            has_more=offset + returned < total,
+        ),
+    )
 
 
 def _discover_cache_usable(
@@ -239,12 +274,16 @@ async def discover(
     openagenda_key: str | None = Query(default=None),
     live_events_only: bool = Query(default=False),
     refresh: bool = Query(default=False),
+    offset: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1, le=120),
     lang: str = Query(default="en", max_length=8),
 ) -> DiscoverResponse:
     client_key = _normalize_client_key(openagenda_key)
     oa_tag = _openagenda_cache_tag(client_key)
     live_tag = "live" if live_events_only else "all"
     lng = normalize_lang(lang)
+    page_size = limit if limit is not None else settings.DISCOVER_PAGE_SIZE
+    paginate = limit is not None or offset > 0
 
     # ── Coordinate-based path (skips geocoding, used by pinned locations) ──
     if lat is not None and lon is not None:
@@ -254,10 +293,6 @@ async def discover(
             f"discover::coords::{_make_pin_id(lat, lon)}::"
             f"{effective_city.lower()}::{oa_tag}::{live_tag}::{lng}"
         )
-        if not refresh:
-            cached = cache.get(cache_key)
-            if cached and _discover_cache_usable(cached, live_events_only=live_events_only):
-                return cached
         place = Place(
             name=display,
             latitude=lat,
@@ -273,66 +308,74 @@ async def discover(
             f"discover::{effective_city.lower()}::"
             f"{effective_country.lower()}::{oa_tag}::{live_tag}::{lng}"
         )
-        if not refresh:
-            cached = cache.get(cache_key)
-            if cached and _discover_cache_usable(cached, live_events_only=live_events_only):
-                return cached
-        try:
-            place = await geocode_city(effective_city, effective_country, lang=lng)
-        except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc))
-        except Exception:
-            raise HTTPException(status_code=502, detail=geocode_unavailable(lng))
+        place = None
 
-    weather, activities_result, events_result = await asyncio.gather(
-        get_weather(place.latitude, place.longitude, lang=lng),
-        get_activities(place),
-        get_events(
-            place,
-            openagenda_key=client_key,
-            lang=lng,
-            city_name=city_name or (city or "").strip() or None,
-            live_only=live_events_only,
-        ),
-        return_exceptions=True,
-    )
+    full_cache_key = f"{cache_key}::full"
+    full: DiscoverResponse | None = None
+    if not refresh:
+        cached_full = cache.get(full_cache_key)
+        if cached_full and _discover_cache_usable(
+            cached_full, live_events_only=live_events_only
+        ):
+            full = cached_full
 
-    # Weather and events are designed to never raise; guard just in case.
-    if isinstance(weather, BaseException):
-        weather = Weather(source_url="https://open-meteo.com/", days=[])
-    if isinstance(events_result, BaseException):
-        events, notices = [], []
-    else:
-        events, notices = events_result
+    if full is None:
+        if place is None:
+            try:
+                place = await geocode_city(effective_city, effective_country, lang=lng)
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc))
+            except Exception:
+                raise HTTPException(status_code=502, detail=geocode_unavailable(lng))
 
-    # Activities may raise ProviderError when every Overpass mirror is down.
-    activities_degraded = False
-    if isinstance(activities_result, BaseException):
-        activities = []
-        activities_degraded = True
-        notices.append(notice_activities_degraded(lng))
-    else:
-        activities = activities_result
-        if not activities:
-            notices.append(notice_no_activities(place.name, lng))
+        weather, activities_result, events_result = await asyncio.gather(
+            get_weather(place.latitude, place.longitude, lang=lng),
+            get_activities(place, limit=settings.DISCOVER_MAX_ACTIVITIES),
+            get_events(
+                place,
+                openagenda_key=client_key,
+                lang=lng,
+                city_name=city_name or (city or "").strip() or None,
+                live_only=live_events_only,
+            ),
+            return_exceptions=True,
+        )
 
-    _attach_weather(activities, weather)
-    _attach_weather(events, weather)
+        if isinstance(weather, BaseException):
+            weather = Weather(source_url="https://open-meteo.com/", days=[])
+        if isinstance(events_result, BaseException):
+            events, notices = [], []
+        else:
+            events, notices = events_result
 
-    response = DiscoverResponse(
-        place=place,
-        weather=weather,
-        activities=activities,
-        events=events,
-        notices=notices,
-    )
-    # Never cache a degraded result, otherwise a transient Overpass outage would
-    # be "stuck" for the whole cache window. Cache only successful lookups.
-    if not activities_degraded and _discover_cache_usable(
-        response, live_events_only=live_events_only
-    ):
-        cache.set(cache_key, response)
-    return response
+        activities_degraded = False
+        if isinstance(activities_result, BaseException):
+            activities = []
+            activities_degraded = True
+            notices.append(notice_activities_degraded(lng))
+        else:
+            activities = activities_result
+            if not activities:
+                notices.append(notice_no_activities(place.name, lng))
+
+        _attach_weather(activities, weather)
+        _attach_weather(events, weather)
+
+        full = DiscoverResponse(
+            place=place,
+            weather=weather,
+            activities=activities,
+            events=events,
+            notices=notices,
+        )
+        if not activities_degraded and _discover_cache_usable(
+            full, live_events_only=live_events_only
+        ):
+            cache.set(full_cache_key, full)
+
+    if paginate:
+        return _paginate_discover(full, offset, page_size)
+    return full
 
 
 # --- Static web app -------------------------------------------------------

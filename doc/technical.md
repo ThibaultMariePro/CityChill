@@ -120,6 +120,8 @@ Query parameters of note:
 |-------|--------|
 | `live_events_only=1` | OpenAgenda only; curated highlights omitted |
 | `refresh=1` | Skip cache read; re-fetch upstream |
+| `offset` | Pagination start index (default `0`) |
+| `limit` | Page size (default from `CITYCHILLY_DISCOVER_PAGE_SIZE`, max 120). When set, the full result is still cached server-side and subsequent pages are sliced from cache |
 | `openagenda_key` | Per-request key override (validated; malformed keys ignored) |
 | `lang` | `en` or `fr` — notices and curated text selection |
 
@@ -270,6 +272,9 @@ All settings are environment variables (see `.env.example`):
 | `CITYCHILLY_CACHE_TTL` | `1800` | Upstream cache TTL (seconds) |
 | `CITYCHILLY_FORECAST_DAYS` | `16` | Weather horizon (max 16) |
 | `CITYCHILLY_EVENT_HORIZON_DAYS` | `28` | Event look-ahead window |
+| `CITYCHILLY_DISCOVER_PAGE_SIZE` | `40` | Default discover page size when `limit` is set |
+| `CITYCHILLY_DISCOVER_MAX_ACTIVITIES` | `200` | Max activities fetched per discover (before paging) |
+| `CITYCHILLY_DISCOVER_MAX_EVENTS` | `200` | Max OpenAgenda events merged per discover |
 | `CITYCHILLY_OVERPASS_URLS` | FR + DE + private.coffee | Comma-separated Overpass mirrors, tried in order |
 | `CITYCHILLY_OVERPASS_TIMEOUT` | `30` | Per-request Overpass timeout (seconds) |
 
@@ -325,6 +330,7 @@ CityChill/
 | 2026-06 | **Multi-pin** — postal code search, autocomplete, coordinate-based discover |
 | 2026-06 | **Live events only** toggle; refresh button; health indicator; Parameters tab |
 | 2026-06 | **i18n** — English / French UI and localized API notices |
+| 2026-06 | **Discover pagination** — `offset` / `limit` on `/api/discover`; **Load more** in the UI |
 | 2026-06 | **OpenAgenda fix** — removed `monolingual` filter so French-only cities (e.g. Nantes) work in English mode |
 | 2026-06 | **Curated expansion** — datasets for 20 French cities |
 

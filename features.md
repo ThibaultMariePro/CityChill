@@ -22,3 +22,8 @@ add a reset button to clear search data, both stored ones, and the last research
 add the today option in the period selection, with the corresponding filter feature
 
 don't load any curated events at start, add an option for the user to load them, but none has to be loaded by default
+
+Google search, triggered with the search button on the cards, has to be done with the location of the activity / event in addition of the title 
+
+Add the possibility to request for a next bunch of results. For now there is a max limit of pulled and shown elements from the api request, but it should be possible to request for more, with a next button for example. 
+

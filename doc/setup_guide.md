@@ -55,17 +55,19 @@ docker compose down
    (**All / Events / Activities**), by **time period** (week / month / quarter),
    flip **Outdoor only**, or enable **Live events only** to hide curated
    highlights and show only OpenAgenda results.
-4. **Refresh** — use the ↻ button next to the filters to re-fetch live events
+4. **Load more** — when additional results are available, use **Load more** below
+   the card grid to fetch the next page (40 items at a time by default).
+5. **Refresh** — use the ↻ button next to the filters to re-fetch live events
    for your current selection (bypasses the server cache).
-5. **Plan** — click **+ Add to agenda** to build your day-by-day roadmap in the
+6. **Plan** — click **+ Add to agenda** to build your day-by-day roadmap in the
    **My Agenda** tab.
-6. **Save** — click the **heart** on any card to keep it in **Favorites**.
-7. **Check the source** — every card has a **↗ Source** button that opens the
+7. **Save** — click the **heart** on any card to keep it in **Favorites**.
+8. **Check the source** — every card has a **↗ Source** button that opens the
    original, official page.
-8. **Switch theme** — use the 🌙 / ☀️ button (top right) for light or dark mode.
-9. **Language** — switch between **English** and **French** in the
-   **Parameters** tab.
-10. **Connection status** — a dot next to the logo (🟢 / 🔴) appears after your
+9. **Switch theme** — use the 🌙 / ☀️ button (top right) for light or dark mode.
+10. **Language** — switch between **English** and **French** in the
+    **Parameters** tab.
+11. **Connection status** — a dot next to the logo (🟢 / 🔴) appears after your
     first interaction; it reflects whether the OpenAgenda key is valid.
 
 > Your agenda and favorites are saved **in your browser**, so they'll still be

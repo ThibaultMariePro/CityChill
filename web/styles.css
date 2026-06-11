@@ -712,6 +712,13 @@ a { color: inherit; }
 .switch--live.is-disabled .switch__label { cursor: not-allowed; }
 
 .results-meta { color: var(--text-soft); font-size: .85rem; margin-bottom: 6px; }
+.discover-more {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0 8px;
+}
+.discover-more__btn { min-width: 10rem; }
+.discover-more__btn.is-loading { opacity: .65; pointer-events: none; }
 .results-meta__detail {
   display: block;
   margin-top: 4px;
