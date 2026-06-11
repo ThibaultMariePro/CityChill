@@ -12,8 +12,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
-  <!-- Color palette generated from config/theme.json (loaded last so it wins). -->
-  <link rel="stylesheet" href="/api/theme.css" />
 </head>
 <body>
   <header class="topbar">
@@ -22,13 +20,12 @@
         <img src="/assets/logo.svg" alt="" class="brand__logo" width="34" height="34" />
         <span
           id="api-status"
-          class="api-status"
+          class="api-status is-idle"
           role="status"
           aria-live="polite"
-          data-state="unknown"
-          data-i18n-title="status.checking"
-          title="Checking connection…"
-        >🔴</span>
+          data-state="idle"
+          hidden
+        ></span>
         <span class="brand__name">City<span class="brand__accent">Chilly</span></span>
       </a>
 
@@ -67,8 +64,8 @@
     <section class="hero" id="hero">
       <div class="hero__text">
         <p class="hero__eyebrow" id="place-eyebrow" data-i18n="hero.exploring">Now exploring</p>
-        <h1 class="hero__title" id="place-name">Nantes</h1>
-        <p class="hero__subtitle" id="place-sub">France</p>
+        <h1 class="hero__title" id="place-name" data-i18n="hero.pick">Pick a location</h1>
+        <p class="hero__subtitle" id="place-sub" data-i18n="hero.searchHint">Search a city or postal code above</p>
       </div>
       <div class="hero__weather" id="weather-strip" data-i18n-aria="weather.aria" aria-label="Weather forecast"></div>
     </section>

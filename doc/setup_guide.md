@@ -30,7 +30,9 @@ minute).
 
 Go to **<http://localhost:8000>** in your browser.
 
-You should see CityChilly already exploring **Nantes**. 🎉
+You should see a **clean welcome screen** — no city is loaded automatically and
+no data is fetched until you search. Type a city or postal code and press
+**Explore**.
 
 ### 4. Stop it later
 
@@ -42,19 +44,29 @@ docker compose down
 
 ## Using the app
 
-1. **Search a city** — type a name in the top bar (e.g. *Nantes*, *Lisbon*,
-   *Kyoto*) and press **Explore**.
+1. **Search a location** — type a **city name** or **postal code** in the top bar
+   (e.g. *Nantes*, *69001*, *Paris*) and press **Explore**. Suggestions appear
+   as you type; you can pin one or several postal codes for the same area.
 2. **Browse** the cards. Each shows whether it's an **Event** or **Activity**,
    the date, the place, the category and — for outdoor things — a **weather
-   hint**.
+   hint**. Live OpenAgenda events show a **Live** badge; curated highlights show
+   **ℹ️**.
 3. **Filter** by category (the colored chips), by type
-   (**All / Events / Activities**), or flip **Outdoor only**.
-4. **Plan** — click **+ Add to agenda** to build your day-by-day roadmap in the
+   (**All / Events / Activities**), by **time period** (week / month / quarter),
+   flip **Outdoor only**, or enable **Live events only** to hide curated
+   highlights and show only OpenAgenda results.
+4. **Refresh** — use the ↻ button next to the filters to re-fetch live events
+   for your current selection (bypasses the server cache).
+5. **Plan** — click **+ Add to agenda** to build your day-by-day roadmap in the
    **My Agenda** tab.
-5. **Save** — click the **heart** on any card to keep it in **Favorites**.
-6. **Check the source** — every card has a **↗ Source** button that opens the
+6. **Save** — click the **heart** on any card to keep it in **Favorites**.
+7. **Check the source** — every card has a **↗ Source** button that opens the
    original, official page.
-7. **Switch theme** — use the 🌙 / ☀️ button (top right) for light or dark mode.
+8. **Switch theme** — use the 🌙 / ☀️ button (top right) for light or dark mode.
+9. **Language** — switch between **English** and **French** in the
+   **Parameters** tab.
+10. **Connection status** — a dot next to the logo (🟢 / 🔴) appears after your
+    first interaction; it reflects whether the OpenAgenda key is valid.
 
 > Your agenda and favorites are saved **in your browser**, so they'll still be
 > there next time you open CityChilly on the same device.
@@ -63,9 +75,8 @@ docker compose down
 
 ## Optional: live events for *any* city
 
-Out of the box, CityChilly shows **curated event highlights for Nantes** plus
-**live activities for any city** (from OpenStreetMap). If you'd like **live
-events for any city in the world**, connect a free **OpenAgenda** key:
+CityChilly shows **live activities for any city** (from OpenStreetMap) without
+any setup. For **live events** (OpenAgenda) worldwide, connect a free key:
 
 1. Create a free key at <https://developers.openagenda.com/>.
 2. Copy `.env.example` to `.env`:
@@ -80,6 +91,20 @@ events for any city in the world**, connect a free **OpenAgenda** key:
    ```bash
    docker compose up -d --build
    ```
+
+You can also paste a key in the **Parameters** tab (stored in your browser). If
+the server already has `OPENAGENDA_KEY` in `.env`, the browser key is ignored so
+the server configuration is not accidentally overridden.
+
+---
+
+## Curated event highlights (no key required)
+
+For **20 French cities**, CityChilly includes a curated dataset of real venues
+and recurring highlights (Nantes, Paris, Lyon, Marseille, and others — see
+`app/data/*_events.json`). These appear alongside live OpenAgenda events when a
+key is configured, or on their own when it is not. Enable **Live events only**
+to hide them and see OpenAgenda results exclusively.
 
 ---
 
@@ -98,8 +123,8 @@ Built-in palettes: **sunset** (warm default), **citrus**, **berry**, **ember**,
 **ocean**, **forest**.
 
 Then just **refresh your browser** — no rebuild needed (the file is mounted into
-the container). The whole app recolors: buttons, tabs, chips, cards and
-background.
+the container). The full palette CSS is loaded from `/api/theme.css` the first
+time you interact with the app (not on the initial blank screen).
 
 Want your own colors? Edit a palette's `brand` values (any CSS color works) or
 add a new palette and point `"active"` at it. You can also override the choice
@@ -154,8 +179,12 @@ Then open <http://localhost:8000>.
 |---------|------------|
 | "City lookup service unavailable" | Check your internet connection; the app needs to reach the open data APIs. |
 | Activities list is empty | The OpenStreetMap (Overpass) service can be briefly busy — wait a moment and search again. |
-| Events only show for Nantes | That's expected without an OpenAgenda key. Add one (see above) for live events anywhere. |
+| No live events / red dot next to logo | Add a valid `OPENAGENDA_KEY` in `.env` or Parameters. Use **Clear keys** in Parameters if you accidentally pasted invalid text. |
+| Live only shows nothing for a city | Press **Refresh** (↻). If **Outdoor only** is on, turn it off — most live events are not tagged outdoor. |
+| Live only empty for Nantes (fixed) | Older builds dropped French-only OpenAgenda titles in English mode; rebuild with the latest code. |
+| Only curated events, no Live badge | Server key may be missing, invalid, or cached — restart Docker, hard-refresh, use Refresh. |
 | Port 8000 already in use | Set a different `CITYCHILLY_PORT` in `.env` and restart. |
 | Favorites/agenda disappeared | They're stored per-browser/device. Use the same browser, and avoid clearing site data. |
+| Stale results after config change | Click **Refresh**, open Parameters → **Clear cache**, or `POST /api/cache/clear`. |
 
 Enjoy exploring! 🌍

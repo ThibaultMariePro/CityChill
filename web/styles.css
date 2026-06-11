@@ -105,6 +105,7 @@ a { color: inherit; }
   cursor: help;
   transition: opacity .2s ease;
 }
+.api-status.is-idle { display: none; }
 .api-status.is-checking { opacity: .55; }
 .brand__name { font-family: var(--font-display); font-weight: 700; font-size: 1.35rem; color: var(--text); }
 .brand__accent { color: var(--coral); }

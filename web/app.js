@@ -51,7 +51,35 @@
     themePalettes: [],
     activePalette: null,
     serverPalette: null,
+    apiBootstrapped: false,
   };
+
+  let apiBootstrapPromise = null;
+
+  async function ensureApiBootstrap() {
+    if (state.apiBootstrapped) return;
+    if (!apiBootstrapPromise) {
+      apiBootstrapPromise = (async () => {
+        await Promise.all([loadThemePalettes(), loadKeySpecs(), loadCategories()]);
+        const savedPal = readString(LS.palette);
+        if (savedPal && state.themePalettes.some((p) => p.id === savedPal)) {
+          applyPalette(savedPal, { save: false });
+        } else if (state.serverPalette) {
+          state.activePalette = state.serverPalette;
+        }
+        renderLanguagePicker();
+        renderParameters();
+        purgeBrowserKeyWhenServerConfigured();
+        if (state.filters.liveEventsOnly && state.filters.kind === "all") {
+          state.filters.kind = "event";
+        }
+        syncKindFilterUI();
+        renderLiveEventsToggle();
+        state.apiBootstrapped = true;
+      })();
+    }
+    await apiBootstrapPromise;
+  }
 
   // Autocomplete state
   let acTimer        = null;
@@ -279,6 +307,7 @@
   function renderHero() {
     if (!state.pins.length) return;
     const eyebrow = $("#place-eyebrow");
+    if (eyebrow) eyebrow.hidden = false;
     const codes = state.pins.map((p) => p.postcode).filter(Boolean);
     const placeSub = $("#place-sub");
     if (codes.length) {
@@ -562,7 +591,10 @@
 
   function clearResults() {
     const eyebrow = $("#place-eyebrow");
-    if (eyebrow) eyebrow.textContent = t("hero.exploring");
+    if (eyebrow) {
+      eyebrow.textContent = "";
+      eyebrow.hidden = true;
+    }
     $("#place-name").textContent = t("hero.pick");
     const placeSub = $("#place-sub");
     placeSub.textContent = t("hero.searchHint");
@@ -616,6 +648,17 @@
     const meta  = $("#results-meta");
     const hint  = $("#results-filter-hint");
     grid.innerHTML = "";
+
+    if (!state.pins.length) {
+      empty.hidden = false;
+      empty.innerHTML = `<div class="empty__emoji">📍</div><h3>${esc(t("empty.noPins.title"))}</h3><p>${esc(t("empty.noPins.body"))}</p>`;
+      meta.textContent = t("results.zero");
+      if (hint) {
+        hint.hidden = true;
+        hint.textContent = "";
+      }
+      return;
+    }
 
     const raw = rawDiscoverCounts();
     if (
@@ -1026,8 +1069,13 @@
   function renderApiStatus(data) {
     const el = $("#api-status");
     if (!el) return;
+    el.hidden = false;
+    el.classList.remove("is-idle");
     if (data?.checking) {
       el.classList.add("is-checking");
+      el.textContent = "…";
+      el.title = t("status.checking");
+      el.setAttribute("aria-label", el.title);
       return;
     }
     el.classList.remove("is-checking");
@@ -1052,6 +1100,7 @@
   }
 
   async function checkApiHealth({ force = false, testKey } = {}) {
+    await ensureApiBootstrap();
     const now = Date.now();
     if (!force && now - lastHealthAt < HEALTH_MIN_INTERVAL_MS) {
       clearTimeout(healthRetryTimer);
@@ -1210,10 +1259,20 @@
     return `${API}/api/theme.css?palette=${encodeURIComponent(paletteId)}`;
   }
 
+  function ensureThemeStylesheet() {
+    let link = document.querySelector('link[data-theme-palette]');
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.dataset.themePalette = "1";
+      document.head.appendChild(link);
+    }
+    return link;
+  }
+
   function applyPalette(paletteId, { save = true } = {}) {
     if (!paletteId) return;
-    const link = document.querySelector('link[href*="/api/theme.css"]');
-    if (link) link.href = themeCssUrl(paletteId);
+    ensureThemeStylesheet().href = themeCssUrl(paletteId);
 
     state.activePalette = paletteId;
     if (save) localStorage.setItem(LS.palette, paletteId);
@@ -1573,6 +1632,7 @@
   }
 
   async function resolvePostcodeSuggestion(code, parent) {
+    await ensureApiBootstrap();
     const clean = String(code).trim();
     if (!clean) return null;
       const res = await fetch(`${API}/api/geocode?${appendDiscoverParams(new URLSearchParams({ q: clean }))}`);
@@ -1677,6 +1737,7 @@
 
   /* ── autocomplete ────────────────────────────────────────────────────── */
   async function fetchSuggestions(query) {
+    await ensureApiBootstrap();
     if (acController) acController.abort();
     acController = new AbortController();
     try {
@@ -1835,6 +1896,7 @@
 
   /** Re-fetch discover data for every pinned location and rebuild the UI. */
   async function reloadSelection({ refresh = false, oaRetry = false } = {}) {
+    await ensureApiBootstrap();
     const gen = ++loadGeneration;
     prunePinData();
     savePins();
@@ -1946,6 +2008,7 @@
 
   /** Load by city name string (legacy path & form fallback — geocodes on the server). */
   async function loadCityName(city, { refresh = false } = {}) {
+    await ensureApiBootstrap();
     const loadingTimer = setTimeout(
       () => showLoading(true, t("loading.city", { city })), 220
     );
@@ -2006,6 +2069,10 @@
     state.tab = tab;
     $$(".tab").forEach((b) => b.classList.toggle("is-active", b.dataset.tab === tab));
     $$(".panel").forEach((p) => p.classList.toggle("is-active", p.id === `panel-${tab}`));
+    if (tab === "parameters") {
+      ensureApiBootstrap().then(() => renderActivePanel());
+      return;
+    }
     renderActivePanel();
   }
 
@@ -2223,15 +2290,11 @@
     return typeof v === "string" ? v : null;
   }
 
-  async function init() {
+  function init() {
     readParams();
 
     const savedPalette = readString(LS.palette);
-    if (savedPalette) {
-      const link = document.querySelector('link[href*="/api/theme.css"]');
-      if (link) link.href = themeCssUrl(savedPalette);
-      state.activePalette = savedPalette;
-    }
+    if (savedPalette) state.activePalette = savedPalette;
 
     const savedLang = readString(LS.lang);
     const browserLang = navigator.language?.toLowerCase().startsWith("fr") ? "fr" : "en";
@@ -2245,40 +2308,23 @@
     applyTheme(theme);
 
     wire();
-    updateRefreshButton();
-    renderTimeFilter();
-    refreshCounts();
-    updateAgendaExportBar();
     state.filters.liveEventsOnly = localStorage.getItem(LS.liveEventsOnly) === "1";
-    renderLiveEventsToggle();
-
-    await Promise.all([loadThemePalettes(), loadKeySpecs(), loadCategories()]);
-    const savedPal = readString(LS.palette);
-    if (savedPal && state.themePalettes.some((p) => p.id === savedPal)) {
-      applyPalette(savedPal, { save: false });
-    } else if (state.serverPalette) {
-      state.activePalette = state.serverPalette;
-    }
-    renderLanguagePicker();
-    renderParameters();
-    purgeBrowserKeyWhenServerConfigured();
     if (state.filters.liveEventsOnly && state.filters.kind === "all") {
       state.filters.kind = "event";
     }
     syncKindFilterUI();
+    renderTimeFilter();
     renderLiveEventsToggle();
-    await checkApiHealth({ force: true });
+    refreshCounts();
+    updateAgendaExportBar();
+    renderChips();
 
-    const savedPins = readPins();
-    if (savedPins) {
-      state.pins = savedPins;
-      state.pinData = {};
-      await reloadSelection({ refresh: true });
-    } else {
-      const lastCity = readString(LS.city) || "Nantes";
-      $("#city-input").value = lastCity;
-      await loadCityName(lastCity, { refresh: true });
-    }
+    state.pins = [];
+    state.pinData = {};
+    $("#city-input").value = "";
+    clearResults();
+    renderActivePanel();
+    updateRefreshButton();
   }
 
   document.addEventListener("DOMContentLoaded", init);

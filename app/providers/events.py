@@ -258,10 +258,12 @@ def _oa_headers(key: str) -> dict[str, str]:
 
 
 def _oa_event_params(lang: str, *, city: str | None = None, lat: float | None = None, lon: float | None = None) -> list[tuple[str, str]]:
+    # Do not pass OpenAgenda's monolingual filter: French-only agendas (common in
+    # Nantes and other regional cities) return title=null for monolingual=en, and
+    # we would drop every event. _pick_lang() handles multilingual dicts instead.
     params: list[tuple[str, str]] = [
         ("size", "80"),
         ("detailed", "1"),
-        ("monolingual", normalize_lang(lang)),
         ("relative[]", "current"),
         ("relative[]", "upcoming"),
     ]

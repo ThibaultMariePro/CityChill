@@ -3,6 +3,9 @@
 This document explains how CityChilly is built, the technology choices behind it,
 and how the pieces fit together.
 
+> **Maintainers:** update this file (and `setup_guide.md` / `CityChilly.md`)
+> whenever behaviour or APIs change — especially after new features or bug fixes.
+
 ---
 
 ## 1. High-level architecture
@@ -14,14 +17,15 @@ database — which makes it trivial to dockerize and expose on the internet.
 ```
                 ┌──────────────────────────────────────────────┐
                 │                Browser (SPA)                  │
-                │  index.html · styles.css · app.js (vanilla)   │
-                │  localStorage: favorites + agenda + theme     │
+                │  index.html · styles.css · app.js · i18n.js   │
+                │  localStorage: favorites, agenda, theme, keys │
+                │  lazy API bootstrap on first user action    │
                 └───────────────┬──────────────────────────────┘
                                 │  fetch /api/*
                                 ▼
                 ┌──────────────────────────────────────────────┐
                 │              FastAPI (app/main.py)            │
-                │  /api/discover  /api/categories  /api/health  │
+                │  /api/discover  /api/geocode  /api/health  …   │
                 │  + serves the static web UI                   │
                 │  in-memory TTL cache (app/cache.py)           │
                 └───────┬───────────┬───────────┬──────────────┘
@@ -29,7 +33,7 @@ database — which makes it trivial to dockerize and expose on the internet.
             geocode.py  │  weather.py│ activities.py / events.py
                         ▼           ▼           ▼
               Open-Meteo     Open-Meteo    OpenStreetMap (Overpass)
-              Geocoding       Forecast      + curated dataset
+              Geocoding       Forecast      + curated datasets (20 cities)
                                             + OpenAgenda (optional)
 ```
 
@@ -38,12 +42,16 @@ database — which makes it trivial to dockerize and expose on the internet.
 - **One container, no build step.** The UI is plain HTML/CSS/JS served by
   FastAPI, so the Docker image is a single small Python image. No Node, no
   bundler, no `npm install` to break.
-- **Stateless backend.** All user state (favorites, agenda, theme) lives in the
-  browser. The server only aggregates public data, so it scales horizontally and
-  needs no database.
+- **Stateless backend.** All user state (favorites, agenda, theme, optional
+  browser keys) lives in the browser. The server only aggregates public data, so
+  it scales horizontally and needs no database.
 - **Fail-soft providers.** Each data source is isolated and degrades gracefully:
   if Overpass or OpenAgenda is briefly unavailable, the rest of the app keeps
   working and the UI shows a friendly notice.
+- **Lazy frontend bootstrap.** On first paint the UI makes **no API calls** — no
+  geocode, discover, health, theme, or categories fetch. `ensureApiBootstrap()`
+  in `web/app.js` runs on the first search, autocomplete request, Parameters tab
+  visit, or header/main interaction.
 
 ---
 
@@ -59,9 +67,11 @@ database — which makes it trivial to dockerize and expose on the internet.
 
 ### Frontend
 - **Vanilla JavaScript** (no framework, no build) — `web/app.js`.
+- **i18n** — `web/i18n.js` (English / French).
 - **Modern CSS** with custom properties for theming — `web/styles.css`.
 - **Google Fonts**: *Fraunces* (display) + *Inter* (body).
-- **localStorage** for favorites, agenda and theme persistence.
+- **localStorage** for favorites, agenda, theme, language, filters, optional
+  API keys, and pinned postal codes.
 
 ### Tooling / ops
 - **Docker** + **docker compose** for packaging and deployment.
@@ -73,10 +83,10 @@ database — which makes it trivial to dockerize and expose on the internet.
 
 | Provider | Module | Key required? | Purpose |
 |----------|--------|---------------|---------|
-| Open-Meteo Geocoding | `app/providers/geocode.py` | No | City name → lat/lon/country |
+| Open-Meteo Geocoding | `app/providers/geocode.py` | No | City / postal code → coordinates + suggestions |
 | Open-Meteo Forecast | `app/providers/weather.py` | No | Up to 16-day daily forecast |
 | OpenStreetMap Overpass | `app/providers/activities.py` | No | Permanent activities / POIs |
-| Curated dataset | `app/data/nantes_events.json` | No | Real Nantes event highlights |
+| Curated datasets | `app/data/*_events.json` | No | Event highlights for 20 French cities |
 | OpenAgenda | `app/providers/events.py` | Optional | Live events for any city |
 
 All keyless sources are open data, which is why CityChilly works for **any city**
@@ -86,17 +96,37 @@ without any signup.
 
 ## 4. Backend internals
 
-### Request flow (`GET /api/discover?city=...`)
+### Request flow (`GET /api/discover`)
 
-1. **Cache check** — an in-memory TTL cache (`app/cache.py`, default 30 min)
-   keyed by city avoids hammering upstream APIs.
-2. **Geocode** the city to coordinates (`geocode_city`).
-3. **Concurrently** fetch weather, activities and events with
-   `asyncio.gather` — the three slowest calls happen in parallel.
-4. **Attach weather** to outdoor items: each outdoor card gets the forecast for
-   its date (or today for undated activities) plus a 0–100 *outdoor score*.
-5. **Return** a single `DiscoverResponse` (place + weather + activities + events
-   + human-friendly notices).
+Two entry paths:
+
+1. **City name** — `?city=Nantes&country=France` → server geocodes, then fetches.
+2. **Pinned coordinates** — `?lat=…&lon=…&place_name=…&city_name=…` used by
+   multi-postcode pins (skips redundant geocoding).
+
+Common steps:
+
+1. **Cache check** — in-memory TTL cache (`app/cache.py`, default 30 min), keyed
+   by city/coords, OpenAgenda key hash, `live_events_only`, and language.
+   `?refresh=1` bypasses read cache. Stale curated-only rows are rejected when a
+   server OpenAgenda key is configured (`_discover_cache_usable`).
+2. **Concurrent fetch** — weather, activities, and events via `asyncio.gather`.
+3. **Attach weather** to outdoor items (forecast + 0–100 outdoor score).
+4. **Return** `DiscoverResponse` (place, weather, activities, events, notices).
+
+Query parameters of note:
+
+| Param | Effect |
+|-------|--------|
+| `live_events_only=1` | OpenAgenda only; curated highlights omitted |
+| `refresh=1` | Skip cache read; re-fetch upstream |
+| `openagenda_key` | Per-request key override (validated; malformed keys ignored) |
+| `lang` | `en` or `fr` — notices and curated text selection |
+
+### Geocode autocomplete (`GET /api/geocode?q=…`)
+
+Returns area and postal-code suggestions for the search bar. French postcodes are
+prioritized when the query looks numeric.
 
 ### Category model (`app/categories.py`)
 
@@ -133,12 +163,29 @@ heuristic 0–100 score. The UI turns this into a badge:
 
 ### Events: curated + live
 
-- **Curated:** `nantes_events.json` holds real Nantes venues with official URLs.
-  Dates are generated **relative to today** (`day_offset`), so the demo always
-  shows upcoming plans within the configured horizon.
-- **Live (optional):** when `OPENAGENDA_KEY` is set, `events.py` searches
-  OpenAgenda for an agenda matching the city and pulls current + upcoming events
-  for **any city**. If anything fails it falls back to the curated data.
+- **Curated:** one JSON file per city under `app/data/` (e.g. `nantes_events.json`,
+  `lyon_events.json`). Real venues with official URLs. Dates are generated
+  **relative to today** (`day_offset`), so highlights always appear upcoming
+  within `CITYCHILLY_EVENT_HORIZON_DAYS`.
+- **Live (optional):** when `OPENAGENDA_KEY` is set, `events.py`:
+  1. Finds agenda UIDs matching the city / region.
+  2. Fetches events per agenda (geo bbox first, then city-name filters).
+  3. Merges and deduplicates (up to 80 events).
+  4. Maps OpenAgenda keywords → shared categories.
+
+**OpenAgenda localization:** responses include multilingual `title` / `description`
+dicts (`{ "fr": "…", "en": "…" }`). The API must **not** send OpenAgenda's
+`monolingual` filter — French-only agendas (typical in Nantes) return `title: null`
+for `monolingual=en`, and every event would be dropped. `_pick_lang()` in
+`events.py` selects the best string for the requested `lang` after fetch.
+
+**Live-only mode:** `live_only=True` returns only OpenAgenda items; if none are
+found, curated data is not used as fallback (user-facing notice instead).
+
+### Health (`GET /api/health`)
+
+Validates the OpenAgenda key against `/v2/agendas` (cached ~20 s per key).
+Returns `connection_ok`, `openagenda_enabled`, and default country/city settings.
 
 ---
 
@@ -146,22 +193,28 @@ heuristic 0–100 score. The UI turns this into a badge:
 
 `web/app.js` is a small, dependency-free SPA:
 
-- A central `state` object holds the current place, data, filters and active tab.
-- A single `card()` renderer is reused across **Discover**, **Favorites** and (in
-  compact form) **Agenda**.
-- **Favorites** and **Agenda** are plain objects keyed by item id, persisted to
-  `localStorage`. Because the full item is stored, these tabs render instantly
-  without re-fetching.
-- **Agenda** groups items by start date and sorts chronologically (undated
-  activities fall under "Anytime / flexible").
-- **Theming** is driven by a `data-theme` attribute on `<html>` and CSS custom
-  properties; the choice is persisted and defaults to the OS preference.
-- **Color palette** is data-driven: `config/theme.json` defines named palettes,
-  and `app/theme.py` turns the active one into CSS variables served at
-  `/api/theme.css` (linked after `styles.css`, so it overrides the defaults).
-  Category gradients and background tints reference these variables, so a single
-  config edit recolors the whole UI — no rebuild needed (the file is mounted as a
-  volume in `docker-compose.yml`).
+- Central `state` — pins, pin data, filters, tabs, API bootstrap flag.
+- **Multi-pin model** — users pin postal codes; each pin triggers a discover
+  fetch by coordinates. Chips in the header show active pins.
+- **Filters** — category, kind (event/activity/all), outdoor only, event time
+  period, live events only. Live-only also sets kind to events client-side.
+- **Client-side live filter** — items tagged `openagenda` pass; curated events
+  (`curated` tag) are hidden when live-only is on.
+- **Outdoor filter caveat** — OpenAgenda `is_outdoor` is inferred from category
+  (nature / sports / markets only). Most live culture events are indoor, so
+  **Outdoor only + Live only** often shows an empty grid even when live events
+  exist.
+- Single `card()` renderer for Discover, Favorites, and Agenda.
+- **Favorites / Agenda** — full items in `localStorage`; tabs render without
+  re-fetching.
+- **Theming** — `data-theme` on `<html>`; palette CSS from `/api/theme.css`
+  loaded on bootstrap (not in initial HTML, to avoid an extra request on load).
+- **Parameters tab** — browser `openagenda_key`; `isPlausibleOpenAgendaKey()`
+  rejects malformed pasted text; server-configured key takes precedence
+  (`serverHasOpenAgendaKey()`).
+- **Refresh button** — `reloadSelection({ refresh: true })` re-fetches all pins.
+- **Health dot** — hidden until first `checkApiHealth()` (debounced on user
+  interaction in header/main).
 
 ### Security / robustness notes
 - All dynamic text is HTML-escaped before injection (`esc()`), guarding against
@@ -177,15 +230,27 @@ heuristic 0–100 score. The UI turns this into a badge:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/` | GET | The web app |
-| `/api/health` | GET | Liveness + whether OpenAgenda is enabled |
-| `/api/categories` | GET | The category taxonomy (id, label, emoji) |
-| `/api/discover?city=&country=` | GET | Place + weather + activities + events |
+| `/api/health` | GET | Liveness + OpenAgenda key validation |
+| `/api/categories` | GET | Category taxonomy (id, label, emoji) |
+| `/api/geocode?q=` | GET | Autocomplete suggestions |
+| `/api/discover` | GET | Place + weather + activities + events |
+| `/api/keys` | GET | Which API keys the server expects (masked) |
+| `/api/theme` | GET | Available color palettes |
+| `/api/theme.css` | GET | CSS variables for active palette |
+| `/api/cache/clear` | POST | Flush in-memory upstream cache |
 | `/docs` | GET | Auto-generated OpenAPI / Swagger UI |
 
-Example:
+Examples:
 
 ```bash
-curl "http://localhost:8000/api/discover?city=Nantes"
+# Discover by city (all sources)
+curl "http://localhost:8000/api/discover?city=Nantes&lang=en"
+
+# Live OpenAgenda events only
+curl "http://localhost:8000/api/discover?city=Nantes&live_events_only=1&refresh=1"
+
+# Autocomplete
+curl "http://localhost:8000/api/geocode?q=44100&count=8"
 ```
 
 ---
@@ -197,7 +262,8 @@ All settings are environment variables (see `.env.example`):
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `CITYCHILLY_PORT` | `8000` | Host port (compose) |
-| `CITYCHILLY_DEFAULT_CITY` | `Nantes` | City shown on first load |
+| `CITYCHILLY_DEFAULT_CITY` | `Nantes` | Fallback city for API calls without `city` |
+| `CITYCHILLY_DEFAULT_COUNTRY` | `France` | Default country for geocoding |
 | `CITYCHILLY_THEME_CONFIG` | `config/theme.json` | Path to the palette config |
 | `CITYCHILLY_ACTIVE_PALETTE` | *(from config)* | Override the active palette |
 | `OPENAGENDA_KEY` | *(empty)* | Enable live events for any city |
@@ -212,19 +278,25 @@ All settings are environment variables (see `.env.example`):
 ## 8. Project layout
 
 ```
-quicktrip/
+CityChill/
 ├── app/                     # FastAPI backend
 │   ├── main.py              # App + API routes + static serving
 │   ├── config.py            # Env-driven settings
 │   ├── cache.py             # In-memory TTL cache
 │   ├── categories.py        # Shared category taxonomy + OSM mapping
 │   ├── theme.py             # Loads config/theme.json -> palette CSS
+│   ├── i18n.py              # Server-side notice strings (en/fr)
+│   ├── api_keys.py          # Key metadata for /api/keys
 │   ├── models.py            # Pydantic response models
 │   ├── data/
-│   │   └── nantes_events.json
+│   │   ├── nantes_events.json
+│   │   ├── lyon_events.json
+│   │   ├── paris_events.json
+│   │   ├── …                # 20 curated city files total
+│   │   └── curated_fr.json  # French overlays for curated titles
 │   └── providers/
-│       ├── http.py          # Shared async client
-│       ├── geocode.py
+│       ├── http.py          # Shared async client + Overpass failover
+│       ├── geocode.py       # Geocoding + place search
 │       ├── weather.py
 │       ├── activities.py    # OpenStreetMap / Overpass
 │       └── events.py        # Curated + OpenAgenda
@@ -232,6 +304,7 @@ quicktrip/
 │   ├── index.html
 │   ├── styles.css
 │   ├── app.js
+│   ├── i18n.js
 │   ├── manifest.webmanifest
 │   └── assets/logo.svg
 ├── config/
@@ -244,9 +317,23 @@ quicktrip/
 
 ---
 
-## 9. Possible extensions
+## 9. Changelog (recent)
+
+| Date | Change |
+|------|--------|
+| 2026-06 | **Clean startup** — no default city, no API requests until user action |
+| 2026-06 | **Multi-pin** — postal code search, autocomplete, coordinate-based discover |
+| 2026-06 | **Live events only** toggle; refresh button; health indicator; Parameters tab |
+| 2026-06 | **i18n** — English / French UI and localized API notices |
+| 2026-06 | **OpenAgenda fix** — removed `monolingual` filter so French-only cities (e.g. Nantes) work in English mode |
+| 2026-06 | **Curated expansion** — datasets for 20 French cities |
+
+---
+
+## 10. Possible extensions
 
 - Persist favorites/agenda server-side with user accounts.
-- Add more curated city datasets alongside `nantes_events.json`.
+- Add more curated city datasets under `app/data/`.
 - Cache upstream responses in Redis for multi-instance deployments.
 - Add a map view using the coordinates already returned per item.
+- Richer `is_outdoor` inference for OpenAgenda events (tags, venue type).

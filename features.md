@@ -20,3 +20,5 @@ make the app not showing anything about nantes at start, juste a clean screen wi
 add a reset button to clear search data, both stored ones, and the last research done by the user
 
 add the today option in the period selection, with the corresponding filter feature
+
+don't load any curated events at start, add an option for the user to load them, but none has to be loaded by default
