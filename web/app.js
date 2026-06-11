@@ -44,6 +44,7 @@
     liveEventsOnly: "citychilly:liveEventsOnly",
     hotToday: "citychilly:hotToday",
     hotWeek: "citychilly:hotWeek",
+    activityKeyword: "citychilly:activityKeyword",
     zones: "citychilly:zones",
     activeZone: "citychilly:activeZone",
   };
@@ -57,7 +58,14 @@
     activeZoneId: null,
     // UI
     categories: [],
-    filters: { category: "all", kind: "all", outdoorOnly: false, eventPeriod: "all", liveEventsOnly: false },
+    filters: {
+      category: "all",
+      kind: "all",
+      outdoorOnly: false,
+      eventPeriod: "all",
+      liveEventsOnly: false,
+      activityKeyword: "",
+    },
     openagendaEnabled: false,
     serverOpenAgendaConfigured: false,
     connectionOk: null,
@@ -852,8 +860,67 @@
     });
   }
 
+  function itemMatchesActivityKeyword(item, query) {
+    if (!query) return true;
+    if (item.kind !== "activity") return true;
+    const q = query.toLowerCase();
+    const meta = catMeta(item.category);
+    const hay = [
+      item.title,
+      item.description,
+      item.keyword,
+      item.location_name,
+      item.city,
+      meta.label,
+      ...(item.tags || []),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return hay.includes(q);
+  }
+
+  function setActivityKeyword(value, { save = true } = {}) {
+    state.filters.activityKeyword = String(value || "").trim();
+    if (save) {
+      if (state.filters.activityKeyword) {
+        localStorage.setItem(LS.activityKeyword, state.filters.activityKeyword);
+      } else {
+        localStorage.removeItem(LS.activityKeyword);
+      }
+    }
+    updateActivitySearchBar();
+    renderDiscover();
+  }
+
+  function clearActivityKeyword() {
+    const input = $("#activity-keyword-input");
+    if (input) input.value = "";
+    setActivityKeyword("");
+  }
+
+  function updateActivitySearchBar() {
+    const form = $("#activity-search-form");
+    const input = $("#activity-keyword-input");
+    const clearBtn = $("#activity-keyword-clear");
+    if (!form || !input) return;
+
+    const show = state.pins.length > 0;
+    form.hidden = !show;
+    if (!show) return;
+
+    const keyword = state.filters.activityKeyword || "";
+    if (document.activeElement !== input) input.value = keyword;
+    if (clearBtn) clearBtn.hidden = !keyword;
+    const disabled = state.filters.kind === "event";
+    input.disabled = disabled;
+    form.classList.toggle("is-disabled", disabled);
+    if (disabled) input.title = t("activitySearch.disabledEvents");
+    else input.removeAttribute("title");
+  }
+
   function filteredItems() {
-    const { category, kind, outdoorOnly, eventPeriod } = state.filters;
+    const { category, kind, outdoorOnly, eventPeriod, activityKeyword } = state.filters;
     let items = allItems();
     if (kind !== "all")     items = items.filter((it) => it.kind === kind);
     if (category !== "all") items = items.filter((it) => it.category === category);
@@ -865,6 +932,9 @@
       items = items.filter(
         (it) => it.kind !== "event" || (it.tags || []).includes("openagenda")
       );
+    }
+    if (activityKeyword) {
+      items = items.filter((it) => itemMatchesActivityKeyword(it, activityKeyword));
     }
     return sortDiscoverItems(items);
   }
@@ -1705,6 +1775,7 @@
       s.classList.toggle("is-active", s.dataset.kind === state.filters.kind);
     });
     renderTimeFilter();
+    updateActivitySearchBar();
   }
 
   async function setLiveEventsOnly(on, { reload = true } = {}) {
@@ -1876,6 +1947,7 @@
       renderWarnings();
       renderZoneFilter();
       renderZones();
+      updateActivitySearchBar();
       renderActivePanel();
     });
     if (reload && state.pins.length) reloadSelection();
@@ -2375,11 +2447,13 @@
     const container = $("#pinned-chips");
     if (!state.pins.length) {
       bar.hidden = true;
+      updateActivitySearchBar();
       updateRefreshButton();
       return;
     }
     bar.hidden        = false;
     container.innerHTML = "";
+    updateActivitySearchBar();
 
     groupPinsForDisplay(state.pins).forEach((group) => {
       const collapse = group.pins.length > 1 && group.pins.every((p) => p.postcode);
@@ -2437,6 +2511,7 @@
     state.pinData = {};
     state.activeZoneId = null;
     persistActiveZone();
+    clearActivityKeyword();
     renderZoneFilter();
     renderZones();
   }
@@ -3126,6 +3201,19 @@
       })
     );
 
+    let activityKeywordTimer = null;
+    $("#activity-keyword-input")?.addEventListener("input", (e) => {
+      clearTimeout(activityKeywordTimer);
+      activityKeywordTimer = setTimeout(() => {
+        setActivityKeyword(e.target.value, { save: true });
+      }, 200);
+    });
+    $("#activity-keyword-clear")?.addEventListener("click", () => clearActivityKeyword());
+    $("#activity-search-form")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      setActivityKeyword($("#activity-keyword-input")?.value || "");
+    });
+
     $("#zone-filter-btn")?.addEventListener("click", (e) => {
       e.stopPropagation();
       toggleZoneFilterMenu();
@@ -3301,6 +3389,9 @@
     refreshCounts();
     updateAgendaExportBar();
     renderChips();
+
+    const savedActivityKeyword = readString(LS.activityKeyword);
+    if (savedActivityKeyword) state.filters.activityKeyword = savedActivityKeyword;
 
     state.zones = readZones();
     updateZonesCount();

@@ -54,9 +54,35 @@
         <span class="theme-toggle__icon">🌙</span>
       </button>
     </div>
-    <div id="pinned-bar" class="pinned-bar" hidden data-i18n-aria="pinned.aria" aria-label="Pinned postal codes">
-      <span class="pinned-bar__label" data-i18n="pinned.label">Postal codes in scope</span>
-      <div id="pinned-chips" class="pinned-bar__chips"></div>
+    <div id="pinned-bar" class="pinned-bar" hidden data-i18n-aria="pinned.aria" aria-label="Pinned locations">
+      <div class="pinned-bar__locations">
+        <span class="pinned-bar__label" data-i18n="pinned.label">Postal codes in scope</span>
+        <div id="pinned-chips" class="pinned-bar__chips"></div>
+      </div>
+      <form id="activity-search-form" class="activity-search" role="search" data-i18n-aria="activitySearch.aria" aria-label="Search activities" hidden>
+        <span class="activity-search__icon" aria-hidden="true">🏷️</span>
+        <input
+          id="activity-keyword-input"
+          class="activity-search__input"
+          type="search"
+          name="activity_keyword"
+          data-i18n-placeholder="activitySearch.placeholder"
+          placeholder="Search activities…"
+          autocomplete="off"
+          spellcheck="false"
+          enterkeyhint="search"
+        />
+        <button
+          type="button"
+          id="activity-keyword-clear"
+          class="activity-search__clear"
+          data-i18n-title="activitySearch.clear"
+          data-i18n-aria="activitySearch.clear"
+          title="Clear activity search"
+          aria-label="Clear activity search"
+          hidden
+        >×</button>
+      </form>
     </div>
   </header>
 
