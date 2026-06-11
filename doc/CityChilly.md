@@ -54,7 +54,9 @@ Tap the **heart** on any card to save it. All your saved items live in the
 
 Transparency first: **every single piece of information has a clickable source**.
 Each card has a **↗ Source** button that opens the original page — the venue's
-official website, the OpenStreetMap object, or the live event listing.
+official website, the OpenStreetMap object, or the live event listing. The
+**🔍 Search** button runs a Google query with the **title and location** (venue
+or place name).
 
 ### Make it yours
 

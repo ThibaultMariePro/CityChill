@@ -260,9 +260,20 @@
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts.join(", "))}`;
   }
 
-  /** Web search for the full card title (uses the browser's default search engine when set). */
-  function searchEngineUrl(query) {
-    const q = String(query || "").trim();
+  /** Build a web-search query from the card title and venue/location. */
+  function searchQueryForItem(item) {
+    const title = String(item?.title || "").trim();
+    if (!title) return null;
+    const location = String(item?.location_name || "").trim();
+    if (!location) return title;
+    const titleLow = title.toLowerCase();
+    const locLow = location.toLowerCase();
+    if (titleLow.includes(locLow) || locLow.includes(titleLow)) return title;
+    return `${title}, ${location}`;
+  }
+
+  function searchEngineUrlForItem(item) {
+    const q = searchQueryForItem(item);
     if (!q) return null;
     return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
   }
@@ -559,13 +570,14 @@
       utilityRow.append(mapsLink, copyMap);
     }
 
-    const searchUrl = searchEngineUrl(item.title);
+    const searchQuery = searchQueryForItem(item);
+    const searchUrl = searchEngineUrlForItem(item);
     if (searchUrl) {
       const searchLink = el("a", "btn btn--ghost btn--compact");
       searchLink.href = searchUrl;
       searchLink.target = "_blank";
       searchLink.rel = "noopener";
-      searchLink.title = t("card.searchTitle", { title: item.title });
+      searchLink.title = t("card.searchTitle", { query: searchQuery });
       searchLink.innerHTML = t("card.search");
       utilityRow.append(searchLink);
     }
