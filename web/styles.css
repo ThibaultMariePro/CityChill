@@ -914,6 +914,8 @@ a { color: inherit; }
 .card__desc { font-size: .87rem; color: var(--text-soft); margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .card__meta { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: .8rem; color: var(--text-soft); margin-top: 2px; }
 .card__meta span { display: inline-flex; align-items: center; gap: 5px; }
+.card__location { gap: 0; }
+.card__city { font-weight: 600; color: var(--text); }
 
 .wx-badge {
   display: inline-flex; align-items: center; gap: 5px;

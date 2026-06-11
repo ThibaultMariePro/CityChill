@@ -306,12 +306,57 @@
     return sp;
   }
 
+  function pinCityName(pin, place) {
+    if (pin?.name && pin.name !== pin.postcode) return pin.name;
+    return place?.name || pin?.display || "";
+  }
+
+  function stampDiscoverCity(data, pin) {
+    const city = pinCityName(pin, data?.place).trim();
+    if (!city) return data;
+    const tag = (item) => ({ ...item, city });
+    return {
+      ...data,
+      events: (data.events || []).map(tag),
+      activities: (data.activities || []).map(tag),
+    };
+  }
+
+  function locationContainsCity(venue, city) {
+    if (!venue || !city) return false;
+    const v = venue.toLowerCase();
+    const c = city.toLowerCase();
+    return v === c || v.includes(c);
+  }
+
+  function formatItemLocation(item) {
+    const venue = String(item?.location_name || "").trim();
+    const city = String(item?.city || "").trim();
+    if (!venue && !city) return "";
+    if (!city || locationContainsCity(venue, city)) return venue || city;
+    if (!venue) return city;
+    return `${venue}, ${city}`;
+  }
+
+  function cardLocationHtml(item) {
+    const venue = String(item?.location_name || "").trim();
+    const city = String(item?.city || "").trim();
+    if (!venue && !city) return "";
+    if (!city || locationContainsCity(venue, city)) {
+      return `<span class="card__location">📍 ${esc(venue || city)}</span>`;
+    }
+    if (!venue) {
+      return `<span class="card__location">📍 <strong class="card__city">${esc(city)}</strong></span>`;
+    }
+    return `<span class="card__location">📍 ${esc(venue)}<span class="card__loc-sep">, </span><strong class="card__city">${esc(city)}</strong></span>`;
+  }
+
   function googleMapsUrl(item) {
     const hasCoords = item.latitude != null && item.longitude != null;
     if (hasCoords) {
       return `https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`;
     }
-    const parts = [item.title, item.location_name].filter(Boolean);
+    const parts = [item.title, formatItemLocation(item)].filter(Boolean);
     if (!parts.length) return null;
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts.join(", "))}`;
   }
@@ -320,7 +365,7 @@
   function searchQueryForItem(item) {
     const title = String(item?.title || "").trim();
     if (!title) return null;
-    const location = String(item?.location_name || "").trim();
+    const location = formatItemLocation(item);
     if (!location) return title;
     const titleLow = title.toLowerCase();
     const locLow = location.toLowerCase();
@@ -575,7 +620,8 @@
     const body    = el("div", "card__body");
     const metaBits = [];
     if (item.kind === "event") metaBits.push(fmtEventDateMeta(item));
-    if (item.location_name)     metaBits.push(`<span>📍 ${esc(item.location_name)}</span>`);
+    const locationHtml = cardLocationHtml(item);
+    if (locationHtml) metaBits.push(locationHtml);
     metaBits.push(`<span>${meta.emoji} ${esc(meta.label)}</span>`);
 
     let wxBadge = "";
@@ -871,7 +917,7 @@
     ].filter(Boolean).join("\n\n");
     if (details) params.set("details", details);
 
-    const location = item.location_name || "";
+    const location = formatItemLocation(item);
     if (location) params.set("location", location);
 
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
@@ -910,7 +956,7 @@
         const meta = catMeta(it.category);
         const type = itemKeyword(it);
         lines.push(`• ${it.title} (${type})`);
-        const bits = [it.location_name, meta.label].filter(Boolean);
+        const bits = [formatItemLocation(it), meta.label].filter(Boolean);
         if (bits.length) lines.push(`  ${bits.join(" · ")}`);
         const maps = googleMapsUrl(it);
         if (maps) lines.push(`  Maps: ${maps}`);
@@ -956,7 +1002,8 @@
         `DTEND;VALUE=DATE:${end}`,
         `SUMMARY:${icsEscape(it.title)}`,
       );
-      if (it.location_name) lines.push(`LOCATION:${icsEscape(it.location_name)}`);
+      const loc = formatItemLocation(it);
+      if (loc) lines.push(`LOCATION:${icsEscape(loc)}`);
       if (details) lines.push(`DESCRIPTION:${icsEscape(details)}`);
       if (it.source_url) lines.push(`URL:${icsEscape(it.source_url)}`);
       lines.push("END:VEVENT");
@@ -1027,7 +1074,7 @@
       groups[key].forEach((it) => {
         const meta = catMeta(it.category);
         const row  = el("div", "agenda__row");
-        const sub  = [it.location_name, meta.label].filter(Boolean).map(esc).join(" · ");
+        const sub  = [formatItemLocation(it), meta.label].filter(Boolean).map(esc).join(" · ");
         row.innerHTML = `
           <div class="agenda__emoji cat-${esc(it.category)}">${meta.emoji}</div>
           <div class="agenda__info">
@@ -2167,7 +2214,8 @@
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "Could not load this location.");
     }
-    return res.json();
+    const data = await res.json();
+    return stampDiscoverCity(data, pin);
   }
 
   /** Re-fetch discover data for every pinned location and rebuild the UI. */
@@ -2347,7 +2395,7 @@
 
       clearPinSelection();
       state.pins = [pin];
-      state.pinData = { [pin.id]: data };
+      state.pinData = { [pin.id]: stampDiscoverCity(data, pin) };
       savePins();
       renderPinnedChips();
       renderHero();
