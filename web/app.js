@@ -29,8 +29,7 @@
   const API = "";
   const DISCOVER_PAGE_SIZE = 40;
   const MIN_CATEGORY_RESULTS = 12;
-  const MAX_CATEGORY_FETCH_ROUNDS = 25;
-  const MAX_KEYWORD_FETCH_ROUNDS = 12;
+  const MAX_FILTER_FETCH_ROUNDS = 25;
   let defaultCountry = "France";
   const LS = {
     theme:     "citychilly:theme",
@@ -74,7 +73,6 @@
     loadMoreInFlight: false,
     eventsLoading: false,
     filterFetchInFlight: false,
-    keywordFetchInFlight: false,
     oaRenderRetry: false,
     tab: "discover",
     keySpecs: [],
@@ -118,7 +116,6 @@
   let acSuggestions  = [];
   let loadGeneration = 0;
   let filterFetchGeneration = 0;
-  let keywordFetchGeneration = 0;
 
   /* ── tiny helpers ────────────────────────────────────────────────────── */
   const $ = (sel) => document.querySelector(sel);
@@ -908,7 +905,7 @@
     }
     updateActivitySearchBar();
     renderActivePanel();
-    if (next.trim()) ensureKeywordResults();
+    if (discoverFiltersActive()) ensureFilteredResults();
   }
 
   function clearActivityKeyword() {
@@ -1020,16 +1017,9 @@
 
     const shownLive = items.filter((it) => isLiveEvent(it)).length;
     if (hint) {
-      if (state.keywordFetchInFlight) {
+      if (state.filterFetchInFlight) {
         hint.hidden = false;
-        hint.textContent = t("loading.keywordMore", {
-          keyword: state.filters.activityKeyword.trim(),
-        });
-      } else if (state.filterFetchInFlight) {
-        const cat = state.categories.find((c) => c.id === state.filters.category);
-        const catLabel = cat ? `${cat.emoji} ${cat.label}` : state.filters.category;
-        hint.hidden = false;
-        hint.textContent = t("loading.categoryMore", { category: catLabel });
+        hint.textContent = t("loading.filterMore");
       } else if (state.eventsLoading) {
         hint.hidden = false;
         hint.textContent = t("loading.events");
@@ -1397,6 +1387,40 @@
     if (readParams().openagenda_key) saveParams({});
   }
 
+  function discoverFilterQuery() {
+    const f = state.filters;
+    return {
+      category: f.category !== "all" ? f.category : null,
+      itemKind: f.kind !== "all" ? f.kind : null,
+      outdoorOnly: Boolean(f.outdoorOnly),
+      eventPeriod: f.eventPeriod !== "all" ? f.eventPeriod : null,
+      keyword: f.activityKeyword.trim() || null,
+      openagendaOnly: Boolean(f.liveEventsOnly),
+    };
+  }
+
+  function discoverFiltersActive(query = discoverFilterQuery()) {
+    return Boolean(
+      query.category
+      || query.itemKind
+      || query.outdoorOnly
+      || query.eventPeriod
+      || query.keyword
+      || query.openagendaOnly
+    );
+  }
+
+  function discoverFilterFingerprint(query = discoverFilterQuery()) {
+    const parts = [];
+    if (query.category) parts.push(`c:${query.category}`);
+    if (query.itemKind) parts.push(`k:${query.itemKind}`);
+    if (query.outdoorOnly) parts.push("out:1");
+    if (query.eventPeriod) parts.push(`p:${query.eventPeriod}`);
+    if (query.keyword) parts.push(`q:${query.keyword.toLowerCase()}`);
+    if (query.openagendaOnly) parts.push("oa:1");
+    return parts.join("|") || "all";
+  }
+
   function appendDiscoverParams(
     sp,
     {
@@ -1406,6 +1430,11 @@
       scope = "all",
       category = null,
       itemKind = null,
+      outdoorOnly = false,
+      eventPeriod = null,
+      keyword = null,
+      openagendaOnly = false,
+      clientToday = null,
     } = {}
   ) {
     appendApiKeysToSearchParams(sp);
@@ -1414,6 +1443,11 @@
     if (scope && scope !== "all") sp.set("scope", scope);
     if (category && category !== "all") sp.set("category", category);
     if (itemKind && itemKind !== "all") sp.set("item_kind", itemKind);
+    if (outdoorOnly) sp.set("outdoor_only", "1");
+    if (eventPeriod) sp.set("event_period", eventPeriod);
+    if (keyword) sp.set("keyword", keyword);
+    if (openagendaOnly) sp.set("openagenda_only", "1");
+    if (clientToday) sp.set("client_today", clientToday);
     if (forDiscover && state.filters.liveEventsOnly) {
       sp.set("live_events_only", "1");
     }
@@ -1445,29 +1479,29 @@
     }, 0);
   }
 
-  function getCategoryPagination(pinId, category) {
-    return state.pinData[pinId]?.categoryPagination?.[category] || null;
+  function getFilterPagination(pinId, fingerprint) {
+    return state.pinData[pinId]?.filterPagination?.[fingerprint] || null;
   }
 
-  function setCategoryPagination(pinId, category, pagination) {
+  function setFilterPagination(pinId, fingerprint, pagination) {
     const data = state.pinData[pinId];
     if (!data || !pagination) return;
-    data.categoryPagination = data.categoryPagination || {};
-    data.categoryPagination[category] = pagination;
+    data.filterPagination = data.filterPagination || {};
+    data.filterPagination[fingerprint] = pagination;
   }
 
-  function categoryHasMore(pinId, category) {
-    const pag = getCategoryPagination(pinId, category);
+  function filterHasMore(pinId, fingerprint) {
+    const pag = getFilterPagination(pinId, fingerprint);
     if (!pag) return true;
     return Boolean(pag.has_more);
   }
 
-  function mergeCategoryPage(pinId, category, page) {
+  function mergeFilterPage(pinId, fingerprint, page) {
     const cur = state.pinData[pinId];
     if (!cur) {
       state.pinData[pinId] = {
         ...page,
-        categoryPagination: page.pagination ? { [category]: page.pagination } : {},
+        filterPagination: page.pagination ? { [fingerprint]: page.pagination } : {},
       };
       return;
     }
@@ -1486,36 +1520,35 @@
         cur.activities.push(item);
       }
     }
-    if (page.pagination) setCategoryPagination(pinId, category, page.pagination);
+    if (page.pagination) setFilterPagination(pinId, fingerprint, page.pagination);
   }
 
-  async function loadNextCategoryPage() {
-    const category = state.filters.category;
-    if (category === "all") return false;
+  async function loadNextFilterPage() {
+    const query = discoverFilterQuery();
+    if (!discoverFiltersActive(query)) return false;
 
+    const fingerprint = discoverFilterFingerprint(query);
     const zoneIds = activeZonePinIds();
     const pinsToFetch = state.pins.filter((pin) => {
       if (zoneIds && !zoneIds.has(pin.id)) return false;
       if (!state.pinData[pin.id]) return false;
-      return categoryHasMore(pin.id, category);
+      return filterHasMore(pin.id, fingerprint);
     });
     if (!pinsToFetch.length) return false;
 
-    const itemKind = state.filters.kind === "all" ? null : state.filters.kind;
     state.loadMoreInFlight = true;
     updateLoadMoreButton();
 
     try {
       const results = await Promise.all(
         pinsToFetch.map(async (pin) => {
-          const pag = getCategoryPagination(pin.id, category);
+          const pag = getFilterPagination(pin.id, fingerprint);
           const offset = pag ? (pag.offset || 0) + (pag.returned || 0) : 0;
           try {
             const data = await fetchDiscoverForPin(pin, {
               offset,
               scope: "all",
-              category,
-              itemKind,
+              ...query,
             });
             return { pin, data, error: null };
           } catch (error) {
@@ -1527,7 +1560,7 @@
       let loadedAny = false;
       for (const { pin, data, error } of results) {
         if (error || !data) continue;
-        mergeCategoryPage(pin.id, category, stampDiscoverCity(data, pin));
+        mergeFilterPage(pin.id, fingerprint, stampDiscoverCity(data, pin));
         loadedAny = true;
       }
       return loadedAny;
@@ -1537,40 +1570,12 @@
     }
   }
 
-  async function ensureKeywordResults() {
-    const gen = ++keywordFetchGeneration;
-    const keyword = state.filters.activityKeyword.trim();
-    if (!keyword || !state.pins.length || state.eventsLoading) return;
-
-    state.keywordFetchInFlight = true;
-    renderDiscover();
-
-    let rounds = 0;
-    try {
-      while (
-        gen === keywordFetchGeneration &&
-        rounds < MAX_KEYWORD_FETCH_ROUNDS &&
-        filteredItems().length < MIN_CATEGORY_RESULTS &&
-        discoverHasMore()
-      ) {
-        await loadMoreDiscover();
-        rounds += 1;
-        if (gen !== keywordFetchGeneration) return;
-        renderDiscover();
-      }
-    } finally {
-      if (gen === keywordFetchGeneration) {
-        state.keywordFetchInFlight = false;
-        renderDiscover();
-      }
-    }
-  }
-
   async function ensureFilteredResults() {
     const gen = ++filterFetchGeneration;
-    const category = state.filters.category;
-    if (category === "all" || !state.pins.length || state.eventsLoading) return;
+    const query = discoverFilterQuery();
+    if (!discoverFiltersActive(query) || !state.pins.length || state.eventsLoading) return;
 
+    const fingerprint = discoverFilterFingerprint(query);
     state.filterFetchInFlight = true;
     renderDiscover();
 
@@ -1578,11 +1583,11 @@
     try {
       while (
         gen === filterFetchGeneration &&
-        rounds < MAX_CATEGORY_FETCH_ROUNDS &&
+        rounds < MAX_FILTER_FETCH_ROUNDS &&
         filteredItems().length < MIN_CATEGORY_RESULTS &&
-        state.pins.some((pin) => categoryHasMore(pin.id, category))
+        state.pins.some((pin) => filterHasMore(pin.id, fingerprint))
       ) {
-        const loaded = await loadNextCategoryPage();
+        const loaded = await loadNextFilterPage();
         if (!loaded) break;
         rounds += 1;
         if (gen !== filterFetchGeneration) return;
@@ -2419,7 +2424,7 @@
     state.filters.category = id;
     renderChips();
     renderDiscover();
-    if (id !== "all") ensureFilteredResults();
+    ensureFilteredResults();
   }
 
   const TIME_PERIOD_LABELS = {
@@ -2460,7 +2465,7 @@
     renderTimeFilter();
     renderHotFilterButtons();
     renderDiscover();
-    if (state.filters.category !== "all") ensureFilteredResults();
+    ensureFilteredResults();
   }
 
   function closeTimeFilterMenu() {
@@ -2840,6 +2845,10 @@
       scope = "all",
       category = null,
       itemKind = null,
+      outdoorOnly = false,
+      eventPeriod = null,
+      keyword = null,
+      openagendaOnly = false,
     } = {}
   ) {
     const placeName = pin.postcode ? `${pin.postcode} · ${pin.name}` : pin.name;
@@ -2851,12 +2860,25 @@
     if (pin.name && pin.name !== pin.postcode) {
       params.city_name = pin.name;
     }
+    const filteredRequest = Boolean(
+      (category && category !== "all")
+      || (itemKind && itemKind !== "all")
+      || outdoorOnly
+      || eventPeriod
+      || keyword
+      || openagendaOnly
+    );
     const sp = appendDiscoverParams(new URLSearchParams(params), {
-      forDiscover: scope === "events" || scope === "all" || Boolean(category),
+      forDiscover: scope === "events" || scope === "all" || filteredRequest,
       offset,
       scope,
       category,
       itemKind,
+      outdoorOnly,
+      eventPeriod,
+      keyword,
+      openagendaOnly,
+      clientToday: localTodayISO(),
     });
     if (refresh) sp.set("refresh", "1");
     const res = await fetch(`${API}/api/discover?${sp}`);
@@ -2984,8 +3006,7 @@
       renderWeather();
       renderWarnings();
       renderActivePanel();
-      if (state.filters.category !== "all") ensureFilteredResults();
-      if (state.filters.activityKeyword.trim()) ensureKeywordResults();
+      if (discoverFiltersActive()) ensureFilteredResults();
       if (refresh && gen === loadGeneration && Object.keys(state.pinData).length) {
         toast(t("toast.refreshDone"));
         checkApiHealth({ force: true });
@@ -3255,7 +3276,7 @@
         }
         syncKindFilterUI();
         renderDiscover();
-        if (state.filters.category !== "all") ensureFilteredResults();
+        ensureFilteredResults();
       })
     );
 
@@ -3320,7 +3341,7 @@
     $("#outdoor-only").addEventListener("change", (e) => {
       state.filters.outdoorOnly = e.target.checked;
       renderDiscover();
-      if (state.filters.category !== "all") ensureFilteredResults();
+      ensureFilteredResults();
     });
 
     $("#theme-toggle").addEventListener("click", () => {

@@ -24,6 +24,7 @@ from app.i18n import (
     notice_no_activities,
 )
 from app.config import settings
+from app.discover_filters import paginate_discover_filtered, sorted_events
 from app.models import (
     DiscoverPagination,
     DiscoverResponse,
@@ -95,7 +96,7 @@ def _paginate_discover(
     paginate events by end date so OSM activities are not buried behind hundreds
     of live events.
     """
-    events = _sorted_events(full.events)
+    events = sorted_events(full.events)
     activities = full.activities
     n_act = len(activities)
     total = n_act + len(events)
@@ -125,60 +126,11 @@ def _paginate_discover(
     )
 
 
-def _sorted_events(events: list[Item]) -> list[Item]:
-    return sorted(
-        events,
-        key=lambda i: (
-            i.end or i.start or "9999-12-31",
-            i.start or "",
-            i.title.lower(),
-        ),
-    )
-
-
-def _paginate_discover_filtered(
-    full: DiscoverResponse,
-    offset: int,
-    limit: int,
-    category: str,
-    *,
-    item_kind: str | None = None,
-) -> DiscoverResponse:
-    """Paginate activities and events that match *category* from the full cache."""
-    activities = [a for a in full.activities if a.category == category]
-    events = [e for e in _sorted_events(full.events) if e.category == category]
-    if item_kind == "event":
-        activities = []
-    elif item_kind == "activity":
-        events = []
-    merged: list[tuple[str, Item]] = [("activity", a) for a in activities]
-    merged.extend(("event", e) for e in events)
-    total = len(merged)
-    page = merged[offset : offset + limit]
-    page_activities = [item for kind, item in page if kind == "activity"]
-    page_events = [item for kind, item in page if kind == "event"]
-    returned = len(page)
-    return DiscoverResponse(
-        place=full.place,
-        weather=full.weather,
-        activities=page_activities,
-        events=page_events,
-        notices=full.notices if offset == 0 else [],
-        pagination=DiscoverPagination(
-            offset=offset,
-            limit=limit,
-            total=total,
-            returned=returned,
-            has_more=offset + returned < total,
-        ),
-    )
-
-
 def _paginate_events_only(
     full: DiscoverResponse, offset: int, limit: int
 ) -> DiscoverResponse:
     """Paginate events only (used when activities were loaded in an earlier request)."""
-    events = _sorted_events(full.events)
+    events = sorted_events(full.events)
     total = len(events)
     page_events = events[offset : offset + limit]
     returned = len(page_events)
@@ -427,6 +379,13 @@ async def discover(
     scope: str = Query(default="all", pattern=r"^(all|places|events)$"),
     category: str | None = Query(default=None, max_length=32),
     item_kind: str | None = Query(default=None, pattern=r"^(event|activity)$"),
+    outdoor_only: bool = Query(default=False),
+    event_period: str | None = Query(
+        default=None, pattern=r"^(today|hot_week|week|month|quarter)$"
+    ),
+    keyword: str | None = Query(default=None, max_length=120),
+    openagenda_only: bool = Query(default=False),
+    client_today: str | None = Query(default=None, max_length=10),
     lang: str = Query(default="en", max_length=8),
 ) -> DiscoverResponse:
     client_key = _normalize_client_key(openagenda_key)
@@ -436,8 +395,18 @@ async def discover(
     page_size = limit if limit is not None else settings.DISCOVER_PAGE_SIZE
     paginate = limit is not None or offset > 0
     filter_category = category if category in CATEGORIES else None
-    want_places = scope in ("all", "places") or filter_category is not None
-    want_events = scope in ("all", "events") or filter_category is not None
+    filter_keyword = (keyword or "").strip() or None
+    filter_period = event_period if event_period and event_period != "all" else None
+    has_filters = bool(
+        filter_category
+        or item_kind
+        or outdoor_only
+        or filter_period
+        or filter_keyword
+        or openagenda_only
+    )
+    want_places = scope in ("all", "places") or has_filters
+    want_events = scope in ("all", "events") or has_filters
 
     # ── Coordinate-based path (skips geocoding, used by pinned locations) ──
     if lat is not None and lon is not None:
@@ -466,7 +435,7 @@ async def discover(
 
     full_cache_key = f"{cache_key}::full"
     full: DiscoverResponse | None = None
-    if not refresh and (scope == "all" or filter_category):
+    if not refresh and (scope == "all" or has_filters):
         cached_full = cache.get(full_cache_key)
         if cached_full and _discover_cache_usable(
             cached_full, live_events_only=live_events_only
@@ -542,20 +511,26 @@ async def discover(
             notices=notices,
         )
         if (
-            (scope == "all" or filter_category)
+            (scope == "all" or has_filters)
             and not activities_degraded
             and _discover_cache_usable(full, live_events_only=live_events_only)
         ):
             cache.set(full_cache_key, full)
 
     if paginate:
-        if filter_category:
-            return _paginate_discover_filtered(
+        if has_filters:
+            return paginate_discover_filtered(
                 full,
                 offset,
                 page_size,
-                filter_category,
+                category=filter_category,
                 item_kind=item_kind,
+                outdoor_only=outdoor_only,
+                event_period=filter_period,
+                keyword=filter_keyword,
+                openagenda_only=openagenda_only,
+                client_today=client_today,
+                lang=lng,
             )
         if scope == "events":
             return _paginate_events_only(full, offset, page_size)

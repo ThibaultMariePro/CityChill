@@ -122,6 +122,13 @@ Query parameters of note:
 | `refresh=1` | Skip cache read; re-fetch upstream |
 | `offset` | Pagination start index (default `0`) |
 | `limit` | Page size (default from `CITYCHILLY_DISCOVER_PAGE_SIZE`, max 120). When set, the full result is still cached server-side and subsequent pages are sliced from cache |
+| `category` | When combined with `offset`/`limit`, paginate only items in this category from the full server cache |
+| `item_kind` | Optional `event` or `activity` — narrows filtered pagination |
+| `outdoor_only=1` | Filtered pagination: outdoor items only |
+| `event_period` | `today`, `hot_week`, `week`, `month`, or `quarter` — events only (activities pass through) |
+| `keyword` | Text search across title, description, keyword, location, category label, tags |
+| `openagenda_only=1` | Filtered pagination: live OpenAgenda events only |
+| `client_today` | `YYYY-MM-DD` anchor for period filters (browser local date) |
 | `openagenda_key` | Per-request key override (validated; malformed keys ignored) |
 | `lang` | `en` or `fr` — notices and curated text selection |
 
@@ -199,7 +206,12 @@ Returns `connection_ok`, `openagenda_enabled`, and default country/city settings
 - **Multi-pin model** — users pin postal codes; each pin triggers a discover
   fetch by coordinates. Chips in the header show active pins.
 - **Filters** — category, kind (event/activity/all), outdoor only, event time
-  period, live events only. Live-only also sets kind to events client-side.
+  period, keyword search, live events only. Live-only also sets kind to events
+  client-side. Whenever any narrowing filter is active and fewer than 12 items
+  match the loaded cache, `ensureFilteredResults()` pages through the **full
+  server-side discover cache** (`/api/discover` with matching query params) and
+  merges new rows into `pinData` until enough matches appear or the filter is
+  exhausted.
 - **Client-side live filter** — items tagged `openagenda` pass; curated events
   (`curated` tag) are hidden when live-only is on.
 - **Outdoor filter caveat** — OpenAgenda `is_outdoor` is inferred from category
