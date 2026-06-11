@@ -959,17 +959,13 @@
     const grid  = $("#discover-grid");
     const empty = $("#discover-empty");
     const meta  = $("#results-meta");
-    const hint  = $("#results-filter-hint");
     grid.innerHTML = "";
 
     if (!state.pins.length) {
       empty.hidden = false;
       empty.innerHTML = `<div class="empty__emoji">📍</div><h3>${esc(t("empty.noPins.title"))}</h3><p>${esc(t("empty.noPins.body"))}</p>`;
       meta.textContent = t("results.zero");
-      if (hint) {
-        hint.hidden = true;
-        hint.textContent = "";
-      }
+      setResultsFilterHint("");
       updateLoadMoreButton();
       return;
     }
@@ -1016,20 +1012,14 @@
       : esc(headline);
 
     const shownLive = items.filter((it) => isLiveEvent(it)).length;
-    if (hint) {
-      if (state.filterFetchInFlight) {
-        hint.hidden = false;
-        hint.textContent = t("loading.filterMore");
-      } else if (state.eventsLoading) {
-        hint.hidden = false;
-        hint.textContent = t("loading.events");
-      } else if (raw.live > 0 && shownLive === 0) {
-        hint.hidden = false;
-        hint.textContent = t("results.filterHidesLive", { count: raw.live });
-      } else {
-        hint.hidden = true;
-        hint.textContent = "";
-      }
+    if (state.filterFetchInFlight) {
+      setResultsFilterHint(t("loading.filterMore"), { loading: true });
+    } else if (state.eventsLoading) {
+      setResultsFilterHint(t("loading.events"), { loading: true });
+    } else if (raw.live > 0 && shownLive === 0) {
+      setResultsFilterHint(t("results.filterHidesLive", { count: raw.live }));
+    } else {
+      setResultsFilterHint("");
     }
 
     if (!items.length) {
@@ -1635,14 +1625,36 @@
     return state.pins.reduce((sum, pin) => sum + discoverLoadedCount(pin.id), 0);
   }
 
+  function setResultsFilterHint(message, { loading = false } = {}) {
+    const hint = $("#results-filter-hint");
+    const text = $("#results-filter-hint-text");
+    const spinner = $("#results-filter-hint-spinner");
+    if (!hint) return;
+    if (!message) {
+      hint.hidden = true;
+      hint.classList.remove("is-loading");
+      if (text) text.textContent = "";
+      if (spinner) spinner.hidden = true;
+      return;
+    }
+    hint.hidden = false;
+    hint.classList.toggle("is-loading", loading);
+    if (text) text.textContent = message;
+    if (spinner) spinner.hidden = !loading;
+  }
+
   function updateLoadMoreButton() {
     const wrap = $("#discover-more");
     const btn = $("#discover-load-more");
+    const label = $("#discover-load-more-label");
+    const spinner = $("#discover-load-more-spinner");
     if (!wrap || !btn) return;
     const show = state.tab === "discover" && state.pins.length && discoverHasMore();
     wrap.hidden = !show;
     btn.disabled = state.loadMoreInFlight || !show;
     btn.classList.toggle("is-loading", state.loadMoreInFlight);
+    if (label) label.textContent = state.loadMoreInFlight ? t("loading.more") : t("results.loadMore");
+    if (spinner) spinner.hidden = !state.loadMoreInFlight;
   }
 
   let healthDebounceTimer = null;
@@ -3153,7 +3165,10 @@
   function showLoading(on, text) {
     const node = $("#loading");
     if (text) $("#loading-text").textContent = text;
-    node.hidden = !on;
+    if (node) {
+      node.hidden = !on;
+      node.setAttribute("aria-busy", on ? "true" : "false");
+    }
   }
 
   let toastTimer;

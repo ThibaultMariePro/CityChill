@@ -207,11 +207,15 @@
         </div>
       </div>
       <div class="results-meta" id="results-meta"></div>
-      <p class="results-filter-hint" id="results-filter-hint" hidden></p>
+      <p class="results-filter-hint" id="results-filter-hint" hidden role="status" aria-live="polite">
+        <span class="loading-spinner loading-spinner--sm results-filter-hint__spinner" id="results-filter-hint-spinner" hidden aria-hidden="true"></span>
+        <span id="results-filter-hint-text"></span>
+      </p>
       <div class="grid" id="discover-grid"></div>
       <div class="discover-more" id="discover-more" hidden>
         <button type="button" class="btn btn--ghost discover-more__btn" id="discover-load-more">
-          <span data-i18n="results.loadMore">Load more</span>
+          <span class="loading-spinner loading-spinner--sm discover-more__spinner" id="discover-load-more-spinner" hidden aria-hidden="true"></span>
+          <span id="discover-load-more-label" data-i18n="results.loadMore">Load more</span>
         </button>
       </div>
       <div class="empty" id="discover-empty" hidden></div>
@@ -341,9 +345,11 @@
     </p>
   </footer>
 
-  <div id="loading" class="loading" hidden>
-    <div class="loading__spinner"></div>
-    <p id="loading-text" data-i18n="loading.default">Finding cool things to do…</p>
+  <div id="loading" class="loading" hidden role="alertdialog" aria-modal="true" aria-labelledby="loading-text" aria-busy="true">
+    <div class="loading__panel">
+      <div class="loading-spinner loading-spinner--lg" aria-hidden="true"></div>
+      <p id="loading-text" data-i18n="loading.default">Finding cool things to do…</p>
+    </div>
   </div>
 
   <script src="/i18n.js" defer></script>

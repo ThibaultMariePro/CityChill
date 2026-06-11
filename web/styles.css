@@ -1021,6 +1021,9 @@ a { color: inherit; }
   opacity: .9;
 }
 .results-filter-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0 0 14px;
   padding: 8px 12px;
   font-size: .82rem;
@@ -1028,6 +1031,15 @@ a { color: inherit; }
   background: color-mix(in srgb, var(--coral) 10%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--coral) 28%, var(--border));
   border-radius: var(--radius-sm);
+}
+.results-filter-hint.is-loading {
+  font-weight: 600;
+}
+.discover-more__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 /* ===================== Grid & cards ===================== */
@@ -1434,19 +1446,53 @@ a { color: inherit; }
 .footer a:hover { text-decoration: underline; }
 
 /* ===================== Loading ===================== */
+.loading-spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--coral) 22%, var(--border));
+  border-top-color: var(--coral);
+  animation: spin .8s linear infinite;
+  flex-shrink: 0;
+}
+.loading-spinner--sm {
+  width: .95rem;
+  height: .95rem;
+  border-width: 2px;
+}
+.loading-spinner--lg {
+  width: 48px;
+  height: 48px;
+  border-width: 4px;
+}
 .loading {
   position: fixed; inset: 0; z-index: 80;
   background: color-mix(in srgb, var(--bg) 78%, transparent);
   backdrop-filter: blur(4px);
-  display: grid; place-items: center; gap: 14px; align-content: center;
+  display: grid; place-items: center;
 }
-.loading p { color: var(--text-soft); font-weight: 500; }
-.loading__spinner {
-  width: 48px; height: 48px; border-radius: 50%;
-  border: 4px solid var(--surface-2); border-top-color: var(--coral);
-  animation: spin .8s linear infinite;
+.loading__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 28px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+.loading p {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+  font-size: .95rem;
+  text-align: center;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner { animation: none; border-top-color: var(--coral); }
+}
 
 /* Toast */
 .toast {
