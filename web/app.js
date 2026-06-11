@@ -57,6 +57,7 @@
     connectionOk: null,
     refreshInFlight: false,
     loadMoreInFlight: false,
+    eventsLoading: false,
     oaRenderRetry: false,
     tab: "discover",
     keySpecs: [],
@@ -835,7 +836,10 @@
 
     const shownLive = items.filter((it) => isLiveEvent(it)).length;
     if (hint) {
-      if (raw.live > 0 && shownLive === 0) {
+      if (state.eventsLoading) {
+        hint.hidden = false;
+        hint.textContent = t("loading.events");
+      } else if (raw.live > 0 && shownLive === 0) {
         hint.hidden = false;
         hint.textContent = t("results.filterHidesLive", { count: raw.live });
       } else {
@@ -1194,10 +1198,14 @@
     if (readParams().openagenda_key) saveParams({});
   }
 
-  function appendDiscoverParams(sp, { forDiscover = false, offset = 0, limit = DISCOVER_PAGE_SIZE } = {}) {
+  function appendDiscoverParams(
+    sp,
+    { forDiscover = false, offset = 0, limit = DISCOVER_PAGE_SIZE, scope = "all" } = {}
+  ) {
     appendApiKeysToSearchParams(sp);
     appendLangToSearchParams(sp);
     if (defaultCountry) sp.set("country", defaultCountry);
+    if (scope && scope !== "all") sp.set("scope", scope);
     if (forDiscover && state.filters.liveEventsOnly) {
       sp.set("live_events_only", "1");
     }
@@ -1219,41 +1227,48 @@
   }
 
   function discoverUpstreamTotal() {
-    return state.pins.reduce(
-      (sum, pin) => sum + (state.pinData[pin.id]?.pagination?.total || 0),
-      0
-    );
+    return state.pins.reduce((sum, pin) => {
+      const data = state.pinData[pin.id];
+      if (!data) return sum;
+      const acts = data.activities?.length || 0;
+      const pag = data.pagination;
+      if (pag) return sum + acts + pag.total;
+      return sum + acts + (data.events?.length || 0);
+    }, 0);
   }
 
-  function discoverLoadedTotal() {
-    return state.pins.reduce((sum, pin) => sum + discoverLoadedCount(pin.id), 0);
-  }
-
-  function mergeDiscoverPage(pinId, page) {
+  function mergeDiscoverEvents(pinId, page, { append = false } = {}) {
     const cur = state.pinData[pinId];
     if (!cur) {
       state.pinData[pinId] = page;
       return;
     }
-    const seen = new Set([
-      ...(cur.events || []).map((item) => item.id),
-      ...(cur.activities || []).map((item) => item.id),
-    ]);
-    for (const item of page.events || []) {
-      if (!seen.has(item.id)) {
-        cur.events.push(item);
-        seen.add(item.id);
+    if (append) {
+      const seen = new Set((cur.events || []).map((item) => item.id));
+      for (const item of page.events || []) {
+        if (!seen.has(item.id)) {
+          cur.events.push(item);
+          seen.add(item.id);
+        }
       }
-    }
-    for (const item of page.activities || []) {
-      if (!seen.has(item.id)) {
-        cur.activities.push(item);
-        seen.add(item.id);
-      }
+    } else {
+      cur.events = page.events || [];
     }
     if (page.pagination) cur.pagination = page.pagination;
-    if (!cur.place && page.place) cur.place = page.place;
-    if (!cur.weather?.days?.length && page.weather) cur.weather = page.weather;
+    if (page.notices?.length) {
+      const seen = new Set(cur.notices || []);
+      cur.notices = [...(cur.notices || [])];
+      for (const n of page.notices) {
+        if (!seen.has(n)) {
+          seen.add(n);
+          cur.notices.push(n);
+        }
+      }
+    }
+  }
+
+  function discoverLoadedTotal() {
+    return state.pins.reduce((sum, pin) => sum + discoverLoadedCount(pin.id), 0);
   }
 
   function updateLoadMoreButton() {
@@ -2189,7 +2204,10 @@
     btn.classList.toggle("is-spinning", state.refreshInFlight);
   }
 
-  async function fetchDiscoverForPin(pin, { refresh = false, offset = 0 } = {}) {
+  async function fetchDiscoverForPin(
+    pin,
+    { refresh = false, offset = 0, scope = "all" } = {}
+  ) {
     const placeName = pin.postcode ? `${pin.postcode} · ${pin.name}` : pin.name;
     const params = {
       lat: String(pin.latitude),
@@ -2200,8 +2218,9 @@
       params.city_name = pin.name;
     }
     const sp = appendDiscoverParams(new URLSearchParams(params), {
-      forDiscover: true,
+      forDiscover: scope === "events" || scope === "all",
       offset,
+      scope,
     });
     if (refresh) sp.set("refresh", "1");
     const res = await fetch(`${API}/api/discover?${sp}`);
@@ -2235,18 +2254,21 @@
     renderWarnings();
     renderActivePanel();
 
-    const loadingMsg = refresh ? t("loading.refresh") : t("loading.updating");
-    const loadingTimer = setTimeout(() => showLoading(true, loadingMsg), 220);
+    const loadingMsg = refresh
+      ? t("loading.refresh")
+      : t("loading.places");
+    showLoading(true, loadingMsg);
+    state.eventsLoading = false;
     if (refresh) {
       state.refreshInFlight = true;
       updateRefreshButton();
     }
 
     try {
-      const results = await Promise.all(
+      const placeResults = await Promise.all(
         state.pins.map(async (pin) => {
           try {
-            const data = await fetchDiscoverForPin(pin, { refresh });
+            const data = await fetchDiscoverForPin(pin, { refresh, scope: "places" });
             return { pin, data, error: null };
           } catch (error) {
             return { pin, data: null, error };
@@ -2256,17 +2278,16 @@
 
       if (gen !== loadGeneration) return;
 
-      // Rebuild pinData from scratch so removed pins never leave stale cards.
       const nextData = {};
       const failed = [];
 
-      for (const { pin, data, error } of results) {
+      for (const { pin, data, error } of placeResults) {
         if (!state.pins.some((p) => p.id === pin.id)) continue;
         if (error || !data) {
           failed.push(pin);
           continue;
         }
-        nextData[pin.id] = data;
+        nextData[pin.id] = { ...data, events: [], pagination: null };
       }
 
       state.pinData = nextData;
@@ -2292,6 +2313,39 @@
       renderHero();
       renderWeather();
       renderWarnings();
+      showLoading(false);
+      renderActivePanel();
+
+      state.eventsLoading = true;
+      renderActivePanel();
+      const eventResults = await Promise.all(
+        state.pins.map(async (pin) => {
+          if (!state.pinData[pin.id]) return { pin, data: null, error: null };
+          try {
+            const data = await fetchDiscoverForPin(pin, { refresh, scope: "events" });
+            return { pin, data, error: null };
+          } catch (error) {
+            return { pin, data: null, error };
+          }
+        })
+      );
+
+      if (gen !== loadGeneration) return;
+
+      for (const { pin, data, error } of eventResults) {
+        if (!state.pins.some((p) => p.id === pin.id) || !data) continue;
+        if (error) {
+          toast(error.message || t("toast.error"));
+          continue;
+        }
+        mergeDiscoverEvents(pin.id, data);
+      }
+
+      state.eventsLoading = false;
+      renderPinnedChips();
+      renderHero();
+      renderWeather();
+      renderWarnings();
       renderActivePanel();
       if (refresh && gen === loadGeneration && Object.keys(state.pinData).length) {
         toast(t("toast.refreshDone"));
@@ -2307,8 +2361,8 @@
       }
     } finally {
       if (gen === loadGeneration) {
-        clearTimeout(loadingTimer);
         showLoading(false);
+        state.eventsLoading = false;
       }
       if (refresh) {
         state.refreshInFlight = false;
@@ -2338,7 +2392,10 @@
           const pag = state.pinData[pin.id].pagination;
           const nextOffset = (pag?.offset || 0) + (pag?.returned || 0);
           try {
-            const data = await fetchDiscoverForPin(pin, { offset: nextOffset });
+            const data = await fetchDiscoverForPin(pin, {
+              offset: nextOffset,
+              scope: "events",
+            });
             return { pin, data, error: null };
           } catch (error) {
             return { pin, data: null, error };
@@ -2350,7 +2407,7 @@
           toast(error?.message || t("toast.error"));
           continue;
         }
-        mergeDiscoverPage(pin.id, data);
+        mergeDiscoverEvents(pin.id, data, { append: true });
       }
       renderWeather();
       renderWarnings();
@@ -2366,20 +2423,19 @@
   /** Load by city name string (legacy path & form fallback — geocodes on the server). */
   async function loadCityName(city, { refresh = false } = {}) {
     await ensureApiBootstrap();
-    const loadingTimer = setTimeout(
-      () => showLoading(true, t("loading.city", { city })), 220
-    );
+    showLoading(true, t("loading.city", { city }));
+    state.eventsLoading = false;
     try {
-      const sp = appendDiscoverParams(new URLSearchParams({ city }), { forDiscover: true });
-      if (refresh) sp.set("refresh", "1");
-      const res = await fetch(`${API}/api/discover?${sp}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+      const spPlaces = appendDiscoverParams(new URLSearchParams({ city }), { scope: "places" });
+      if (refresh) spPlaces.set("refresh", "1");
+      const resPlaces = await fetch(`${API}/api/discover?${spPlaces}`);
+      if (!resPlaces.ok) {
+        const err = await resPlaces.json().catch(() => ({}));
         throw new Error(err.detail || "Could not load this city.");
       }
-      const data  = await res.json();
-      const place = data.place;
-      const pin   = {
+      const placeData = await resPlaces.json();
+      const place = placeData.place;
+      const pin = {
         id:        makePinId(place.latitude, place.longitude),
         name:      place.name,
         display:   [place.name, place.admin, place.country].filter(Boolean).join(", "),
@@ -2390,17 +2446,45 @@
 
       clearPinSelection();
       state.pins = [pin];
-      state.pinData = { [pin.id]: stampDiscoverCity(data, pin) };
+      state.pinData = {
+        [pin.id]: stampDiscoverCity(
+          { ...placeData, events: [], pagination: null },
+          pin
+        ),
+      };
       savePins();
       renderPinnedChips();
       renderHero();
+      renderWeather();
+      renderWarnings();
+      showLoading(false);
+      renderActivePanel();
+
+      state.eventsLoading = true;
+      renderActivePanel();
+      const spEvents = appendDiscoverParams(
+        new URLSearchParams({
+          lat: String(pin.latitude),
+          lon: String(pin.longitude),
+          place_name: pin.name,
+          city_name: pin.name,
+        }),
+        { scope: "events", forDiscover: true, offset: 0 }
+      );
+      if (refresh) spEvents.set("refresh", "1");
+      const resEvents = await fetch(`${API}/api/discover?${spEvents}`);
+      if (!resEvents.ok) {
+        const err = await resEvents.json().catch(() => ({}));
+        throw new Error(err.detail || "Could not load events for this city.");
+      }
+      mergeDiscoverEvents(pin.id, stampDiscoverCity(await resEvents.json(), pin));
       renderWeather();
       renderWarnings();
       renderActivePanel();
     } catch (e) {
       toast(e.message || t("toast.error"));
     } finally {
-      clearTimeout(loadingTimer);
+      state.eventsLoading = false;
       showLoading(false);
     }
   }

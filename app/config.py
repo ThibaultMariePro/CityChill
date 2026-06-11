@@ -71,8 +71,17 @@ class Settings:
 
     # Discover pagination — full upstream fetch is cached, then sliced per page.
     DISCOVER_PAGE_SIZE: int = int(os.getenv("CITYCHILLY_DISCOVER_PAGE_SIZE", "40"))
+    ACTIVITIES_RADIUS_METERS: int = int(
+        os.getenv("CITYCHILLY_ACTIVITIES_RADIUS_METERS", "10000")
+    )
+    ACTIVITIES_OVERPASS_PRIORITY_OUTPUT: int = int(
+        os.getenv("CITYCHILLY_ACTIVITIES_OVERPASS_PRIORITY_OUTPUT", "700")
+    )
+    ACTIVITIES_OVERPASS_GENERAL_OUTPUT: int = int(
+        os.getenv("CITYCHILLY_ACTIVITIES_OVERPASS_GENERAL_OUTPUT", "900")
+    )
     DISCOVER_MAX_ACTIVITIES: int = int(
-        os.getenv("CITYCHILLY_DISCOVER_MAX_ACTIVITIES", "200")
+        os.getenv("CITYCHILLY_DISCOVER_MAX_ACTIVITIES", "300")
     )
     DISCOVER_MAX_EVENTS: int = int(os.getenv("CITYCHILLY_DISCOVER_MAX_EVENTS", "800"))
 

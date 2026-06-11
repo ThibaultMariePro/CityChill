@@ -6,6 +6,7 @@ so the user always has a clickable source.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 
 from app.categories import (
@@ -14,28 +15,74 @@ from app.categories import (
     category_label,
     resolve_keyword,
 )
+from app.config import settings
 from app.models import Item, Place
 from app.providers.http import run_overpass
 
-# Build the regex value lists per OSM key from the taxonomy mapping.
-_KEY_VALUES: dict[str, list[str]] = {}
-for key, value, _cat in OSM_TAG_TO_CATEGORY:
-    _KEY_VALUES.setdefault(key, []).append(value)
-# Also surface malls (markets).
-_KEY_VALUES.setdefault("shop", []).append("mall")
+# Build regex value lists per OSM key, split so parks/museums are not crowded out
+# by bars and cafés in a single Overpass output cap.
+_KEY_VALUES_PRIORITY: dict[str, list[str]] = {}
+_KEY_VALUES_GENERAL: dict[str, list[str]] = {}
+_PRIORITY_CATEGORIES = frozenset({"nature", "culture", "family", "sports"})
+
+for key, value, category in OSM_TAG_TO_CATEGORY:
+    bucket = (
+        _KEY_VALUES_PRIORITY
+        if category in _PRIORITY_CATEGORIES or key in ("historic", "natural", "landuse")
+        else _KEY_VALUES_GENERAL
+    )
+    bucket.setdefault(key, []).append(value)
+_KEY_VALUES_GENERAL.setdefault("shop", []).append("mall")
+
+_CATEGORY_ORDER = (
+    "nature",
+    "culture",
+    "family",
+    "sports",
+    "markets",
+    "food",
+    "music",
+    "festival",
+)
 
 
-def _build_query(lat: float, lon: float, radius: int = 7000) -> str:
+def _build_query(
+    lat: float,
+    lon: float,
+    key_values: dict[str, list[str]],
+    *,
+    radius: int,
+    output_cap: int,
+) -> str:
     parts = []
-    for key, values in _KEY_VALUES.items():
+    for key, values in key_values.items():
+        if not values:
+            continue
         regex = "|".join(sorted(set(values)))
         parts.append(
             f'  nwr["{key}"~"^({regex})$"]["name"](around:{radius},{lat},{lon});'
         )
+    if not parts:
+        return ""
     body = "\n".join(parts)
-    # A higher output cap captures area features (parks, gardens, museums) that
-    # OSM returns after point POIs such as bars and cafes.
-    return f"[out:json][timeout:18];\n(\n{body}\n);\nout center 800;"
+    return f"[out:json][timeout:20];\n(\n{body}\n);\nout center {output_cap};"
+
+
+def _element_name(tags: dict[str, str], *, lang: str = "en") -> str | None:
+    """Resolve a display name from OSM tags (incl. localized names)."""
+    prefer = "fr" if lang == "fr" else "en"
+    for key in (
+        f"name:{prefer}",
+        "name",
+        "name:en",
+        "name:fr",
+        "alt_name",
+        "official_name",
+    ):
+        value = tags.get(key)
+        if value and str(value).strip():
+            return str(value).strip()
+    return None
 
 
 def _categorise(tags: dict[str, str]) -> str | None:
@@ -61,23 +108,72 @@ def _make_id(prefix: str, value: str) -> str:
     return f"{prefix}-{digest}"
 
 
-async def get_activities(place: Place, limit: int = 120) -> list[Item]:
+def _category_rank(category: str) -> int:
+    try:
+        return _CATEGORY_ORDER.index(category)
+    except ValueError:
+        return len(_CATEGORY_ORDER)
+
+
+async def _run_overpass_queries(lat: float, lon: float) -> list[dict]:
+    radius = settings.ACTIVITIES_RADIUS_METERS
+    priority_q = _build_query(
+        lat,
+        lon,
+        _KEY_VALUES_PRIORITY,
+        radius=radius,
+        output_cap=settings.ACTIVITIES_OVERPASS_PRIORITY_OUTPUT,
+    )
+    general_q = _build_query(
+        lat,
+        lon,
+        _KEY_VALUES_GENERAL,
+        radius=radius,
+        output_cap=settings.ACTIVITIES_OVERPASS_GENERAL_OUTPUT,
+    )
+    tasks = []
+    if priority_q:
+        tasks.append(run_overpass(priority_q))
+    if general_q:
+        tasks.append(run_overpass(general_q))
+    if not tasks:
+        return []
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    elements: list[dict] = []
+    seen_ids: set[tuple[str, int]] = set()
+    for result in results:
+        if isinstance(result, BaseException):
+            continue
+        for element in result.get("elements", []):
+            eid = (element.get("type", "node"), element.get("id"))
+            if eid in seen_ids:
+                continue
+            seen_ids.add(eid)
+            elements.append(element)
+
+    if not elements:
+        errors = [r for r in results if isinstance(r, BaseException)]
+        if errors:
+            raise errors[0]
+    return elements
+
+
+async def get_activities(
+    place: Place, limit: int = 120, *, lang: str = "en"
+) -> list[Item]:
     """Fetch activities for a place.
 
     Raises ProviderError if every Overpass mirror is unavailable, so the caller
     can tell the difference between "service busy" and "genuinely nothing here".
     """
-    query = _build_query(place.latitude, place.longitude)
-    data = await run_overpass(query)  # raises ProviderError on total failure
+    elements = await _run_overpass_queries(place.latitude, place.longitude)
 
-    # Group by category first so we can balance the final selection. OSM returns
-    # nodes (bars/cafes) before ways/relations (parks/museums), so a naive cap
-    # would crowd out outdoor and cultural spots.
     by_category: dict[str, list[Item]] = {}
     seen: set[str] = set()
-    for element in data.get("elements", []):
+    for element in elements:
         tags = element.get("tags") or {}
-        name = tags.get("name")
+        name = _element_name(tags, lang=lang)
         if not name:
             continue
         category = _categorise(tags)
@@ -130,13 +226,13 @@ async def get_activities(place: Place, limit: int = 120) -> list[Item]:
             )
         )
 
-    # Round-robin across categories so every filter has something to show, while
-    # still respecting the overall limit.
+    ordered_cats = sorted(by_category.keys(), key=_category_rank)
     items: list[Item] = []
-    cursors = {cat: 0 for cat in by_category}
+    cursors = {cat: 0 for cat in ordered_cats}
     while len(items) < limit:
         progressed = False
-        for cat, bucket in by_category.items():
+        for cat in ordered_cats:
+            bucket = by_category[cat]
             idx = cursors[cat]
             if idx < len(bucket):
                 items.append(bucket[idx])

@@ -72,6 +72,14 @@ OSM_VALUE_KEYWORDS: dict[str, str] = {
     "mall": "Shopping mall",
     "beach": "Beach",
     "peak": "Peak",
+    "wood": "Woodland",
+    "wetland": "Wetland",
+    "dog_park": "Dog park",
+    "track": "Running track",
+    "ice_rink": "Ice rink",
+    "golf_course": "Golf course",
+    "picnic_site": "Picnic site",
+    "recreation_ground": "Recreation ground",
 }
 
 # Map OpenStreetMap tags (key=value) to our categories. Order matters: the first
@@ -116,6 +124,15 @@ OSM_TAG_TO_CATEGORY: list[tuple[str, str, str]] = [
     ("shop", "mall", "markets"),
     ("natural", "beach", "nature"),
     ("natural", "peak", "nature"),
+    ("natural", "wood", "nature"),
+    ("natural", "wetland", "nature"),
+    ("leisure", "dog_park", "nature"),
+    ("leisure", "track", "sports"),
+    ("leisure", "ice_rink", "sports"),
+    ("leisure", "golf_course", "sports"),
+    ("leisure", "bowling_alley", "sports"),
+    ("tourism", "picnic_site", "nature"),
+    ("landuse", "recreation_ground", "nature"),
 ]
 
 # Categories whose items are typically experienced outdoors. Used to attach

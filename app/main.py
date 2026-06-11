@@ -95,14 +95,7 @@ def _paginate_discover(
     paginate events by end date so OSM activities are not buried behind hundreds
     of live events.
     """
-    events = sorted(
-        full.events,
-        key=lambda i: (
-            i.end or i.start or "9999-12-31",
-            i.start or "",
-            i.title.lower(),
-        ),
-    )
+    events = _sorted_events(full.events)
     activities = full.activities
     n_act = len(activities)
     total = n_act + len(events)
@@ -120,6 +113,41 @@ def _paginate_discover(
         place=full.place,
         weather=full.weather,
         activities=page_activities,
+        events=page_events,
+        notices=full.notices if offset == 0 else [],
+        pagination=DiscoverPagination(
+            offset=offset,
+            limit=limit,
+            total=total,
+            returned=returned,
+            has_more=offset + returned < total,
+        ),
+    )
+
+
+def _sorted_events(events: list[Item]) -> list[Item]:
+    return sorted(
+        events,
+        key=lambda i: (
+            i.end or i.start or "9999-12-31",
+            i.start or "",
+            i.title.lower(),
+        ),
+    )
+
+
+def _paginate_events_only(
+    full: DiscoverResponse, offset: int, limit: int
+) -> DiscoverResponse:
+    """Paginate events only (used when activities were loaded in an earlier request)."""
+    events = _sorted_events(full.events)
+    total = len(events)
+    page_events = events[offset : offset + limit]
+    returned = len(page_events)
+    return DiscoverResponse(
+        place=full.place,
+        weather=full.weather,
+        activities=[],
         events=page_events,
         notices=full.notices if offset == 0 else [],
         pagination=DiscoverPagination(
@@ -172,16 +200,16 @@ async def _fetch_weather_cached(pin_base: str, place: Place, lng: str) -> Weathe
 
 
 async def _fetch_activities_cached(
-    pin_base: str, place: Place
+    pin_base: str, place: Place, *, lng: str
 ) -> tuple[list[Item], bool]:
     """Return (activities, degraded). Degraded rows are not cached."""
-    key = f"{pin_base}::activities"
+    key = f"{pin_base}::activities::{lng}"
     cached = cache.get(key)
     if cached is not None:
         return cached, False
     try:
         activities = await get_activities(
-            place, limit=settings.DISCOVER_MAX_ACTIVITIES
+            place, limit=settings.DISCOVER_MAX_ACTIVITIES, lang=lng
         )
     except BaseException:
         return [], True
@@ -358,6 +386,7 @@ async def discover(
     refresh: bool = Query(default=False),
     offset: int = Query(default=0, ge=0),
     limit: int | None = Query(default=None, ge=1, le=120),
+    scope: str = Query(default="all", pattern=r"^(all|places|events)$"),
     lang: str = Query(default="en", max_length=8),
 ) -> DiscoverResponse:
     client_key = _normalize_client_key(openagenda_key)
@@ -366,6 +395,8 @@ async def discover(
     lng = normalize_lang(lang)
     page_size = limit if limit is not None else settings.DISCOVER_PAGE_SIZE
     paginate = limit is not None or offset > 0
+    want_places = scope in ("all", "places")
+    want_events = scope in ("all", "events")
 
     # ── Coordinate-based path (skips geocoding, used by pinned locations) ──
     if lat is not None and lon is not None:
@@ -394,7 +425,7 @@ async def discover(
 
     full_cache_key = f"{cache_key}::full"
     full: DiscoverResponse | None = None
-    if not refresh:
+    if scope == "all" and not refresh:
         cached_full = cache.get(full_cache_key)
         if cached_full and _discover_cache_usable(
             cached_full, live_events_only=live_events_only
@@ -411,25 +442,53 @@ async def discover(
                 raise HTTPException(status_code=502, detail=geocode_unavailable(lng))
 
         pin_base = _pin_cache_base(place, effective_city, lng)
-        weather, activities_result, events_result = await asyncio.gather(
-            _fetch_weather_cached(pin_base, place, lng),
-            _fetch_activities_cached(pin_base, place),
-            _fetch_events_cached(
-                pin_base,
-                place,
-                client_key=client_key,
-                lng=lng,
-                city_name=city_name or (city or "").strip() or None,
-                live_only=live_events_only,
-            ),
-        )
+        city_for_events = city_name or (city or "").strip() or None
+        notices: list[str] = []
+        activities: list[Item] = []
+        events: list[Item] = []
+        activities_degraded = False
+        weather = Weather(source_url="https://open-meteo.com/", days=[])
 
-        activities, activities_degraded = activities_result
-        events, notices = events_result
-        if activities_degraded:
-            notices.append(notice_activities_degraded(lng))
-        elif not activities:
-            notices.append(notice_no_activities(place.name, lng))
+        if want_places and want_events:
+            weather, activities_result, events_result = await asyncio.gather(
+                _fetch_weather_cached(pin_base, place, lng),
+                _fetch_activities_cached(pin_base, place, lng=lng),
+                _fetch_events_cached(
+                    pin_base,
+                    place,
+                    client_key=client_key,
+                    lng=lng,
+                    city_name=city_for_events,
+                    live_only=live_events_only,
+                ),
+            )
+            activities, activities_degraded = activities_result
+            events, notices = events_result
+        elif want_places:
+            weather, activities_result = await asyncio.gather(
+                _fetch_weather_cached(pin_base, place, lng),
+                _fetch_activities_cached(pin_base, place, lng=lng),
+            )
+            activities, activities_degraded = activities_result
+        else:
+            weather, events_result = await asyncio.gather(
+                _fetch_weather_cached(pin_base, place, lng),
+                _fetch_events_cached(
+                    pin_base,
+                    place,
+                    client_key=client_key,
+                    lng=lng,
+                    city_name=city_for_events,
+                    live_only=live_events_only,
+                ),
+            )
+            events, notices = events_result
+
+        if want_places:
+            if activities_degraded:
+                notices.append(notice_activities_degraded(lng))
+            elif not activities:
+                notices.append(notice_no_activities(place.name, lng))
 
         _attach_weather(activities, weather)
         _attach_weather(events, weather)
@@ -441,12 +500,16 @@ async def discover(
             events=events,
             notices=notices,
         )
-        if not activities_degraded and _discover_cache_usable(
-            full, live_events_only=live_events_only
+        if (
+            scope == "all"
+            and not activities_degraded
+            and _discover_cache_usable(full, live_events_only=live_events_only)
         ):
             cache.set(full_cache_key, full)
 
     if paginate:
+        if scope == "events":
+            return _paginate_events_only(full, offset, page_size)
         return _paginate_discover(full, offset, page_size)
     return full
 
