@@ -10,7 +10,7 @@
     setLang: () => "fr",
     applyStatic: () => {},
     translateKeyword: (word) => word,
-    dateLocale: () => "en-GB",
+    dateLocale: () => "fr-FR",
     formatDay: (iso) => iso || "",
     formatWeekday: (iso) => iso || "",
     formatDateTime: (d) => String(d),

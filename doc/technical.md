@@ -130,7 +130,7 @@ Query parameters of note:
 | `openagenda_only=1` | Filtered pagination: live OpenAgenda events only |
 | `client_today` | `YYYY-MM-DD` anchor for period filters (browser local date) |
 | `openagenda_key` | Per-request key override (validated; malformed keys ignored) |
-| `lang` | `en` or `fr` — notices and curated text selection |
+| `lang` | `fr` (default) or `en` — notices and curated text selection |
 
 ### Geocode autocomplete (`GET /api/geocode?q=…`)
 

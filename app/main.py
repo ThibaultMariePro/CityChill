@@ -17,6 +17,7 @@ from app.api_keys import API_KEY_SPECS
 from app.cache import TTLCache
 from app.categories import CATEGORIES
 from app.i18n import (
+    DEFAULT_LANG,
     category_label,
     geocode_unavailable,
     normalize_lang,
@@ -292,7 +293,7 @@ async def health(
 async def geocode_suggest(
     q: str = Query(..., min_length=1, max_length=200),
     count: int = Query(default=8, ge=1, le=15),
-    lang: str = Query(default="en", max_length=8),
+    lang: str = Query(default=DEFAULT_LANG, max_length=8),
 ) -> dict:
     """Return autocomplete suggestions for a city name or postal code."""
     q = q.strip()
@@ -349,7 +350,7 @@ async def api_keys() -> dict:
 
 
 @app.get("/api/categories")
-async def categories(lang: str = Query(default="en", max_length=8)) -> dict:
+async def categories(lang: str = Query(default=DEFAULT_LANG, max_length=8)) -> dict:
     lng = normalize_lang(lang)
     return {
         "categories": [
@@ -386,7 +387,7 @@ async def discover(
     keyword: str | None = Query(default=None, max_length=120),
     openagenda_only: bool = Query(default=False),
     client_today: str | None = Query(default=None, max_length=10),
-    lang: str = Query(default="en", max_length=8),
+    lang: str = Query(default=DEFAULT_LANG, max_length=8),
 ) -> DiscoverResponse:
     client_key = _normalize_client_key(openagenda_key)
     oa_tag = _openagenda_cache_tag(client_key)

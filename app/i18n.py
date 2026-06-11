@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 SUPPORTED_LANGS = frozenset({"en", "fr"})
-DEFAULT_LANG = "en"
+DEFAULT_LANG = "fr"
 
 CATEGORY_LABELS: dict[str, dict[str, str]] = {
     "en": {
@@ -90,7 +90,9 @@ WMO_LABELS: dict[str, dict[int, str]] = {
 def normalize_lang(lang: str | None) -> str:
     if lang and lang.lower().startswith("fr"):
         return "fr"
-    return "en"
+    if lang and lang.lower().startswith("en"):
+        return "en"
+    return DEFAULT_LANG
 
 
 def category_label(category_id: str, lang: str | None = None) -> str:
