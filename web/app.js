@@ -63,6 +63,8 @@
       kind: "all",
       outdoorOnly: false,
       eventPeriod: "all",
+      eventDateFrom: null,
+      eventDateTo: null,
       liveEventsOnly: false,
       activityKeyword: "",
     },
@@ -116,6 +118,11 @@
   let acSuggestions  = [];
   let loadGeneration = 0;
   let filterFetchGeneration = 0;
+  const calendarUi = {
+    viewYear: new Date().getFullYear(),
+    viewMonth: new Date().getMonth(),
+    anchor: null,
+  };
 
   /* ── tiny helpers ────────────────────────────────────────────────────── */
   const $ = (sel) => document.querySelector(sel);
@@ -397,6 +404,18 @@
     const evStart = parseISODate(item.start);
     const evEnd = parseISODate(item.end || item.start);
     return evStart <= bounds.end && evEnd >= bounds.start;
+  };
+
+  const eventMatchesDateRange = (item, fromIso, toIso) => {
+    if (item.kind !== "event") return true;
+    if (!fromIso || !toIso || !item.start) return false;
+    const evStart = parseISODate(item.start);
+    const evEnd = parseISODate(item.end || item.start);
+    const rangeStart = parseISODate(fromIso);
+    const rangeEnd = parseISODate(toIso);
+    rangeStart.setHours(0, 0, 0, 0);
+    rangeEnd.setHours(23, 59, 59, 999);
+    return evStart <= rangeEnd && evEnd >= rangeStart;
   };
 
   const wxLevel = (score) => (score >= 70 ? "good" : score >= 45 ? "ok" : "bad");
@@ -930,12 +949,14 @@
   }
 
   function filteredItems() {
-    const { category, kind, outdoorOnly, eventPeriod, activityKeyword } = state.filters;
+    const { category, kind, outdoorOnly, eventPeriod, eventDateFrom, eventDateTo, activityKeyword } = state.filters;
     let items = allItems();
     if (kind !== "all")     items = items.filter((it) => it.kind === kind);
     if (category !== "all") items = items.filter((it) => it.category === category);
     if (outdoorOnly)        items = items.filter((it) => it.is_outdoor);
-    if (eventPeriod !== "all") {
+    if (eventDateFrom && eventDateTo) {
+      items = items.filter((it) => eventMatchesDateRange(it, eventDateFrom, eventDateTo));
+    } else if (eventPeriod !== "all") {
       items = items.filter((it) => eventMatchesPeriod(it, eventPeriod));
     }
     if (state.filters.liveEventsOnly) {
@@ -1369,6 +1390,8 @@
       itemKind: f.kind !== "all" ? f.kind : null,
       outdoorOnly: Boolean(f.outdoorOnly),
       eventPeriod: f.eventPeriod !== "all" ? f.eventPeriod : null,
+      dateFrom: f.eventDateFrom || null,
+      dateTo: f.eventDateTo || null,
       keyword: f.activityKeyword.trim() || null,
       openagendaOnly: Boolean(f.liveEventsOnly),
     };
@@ -1380,6 +1403,7 @@
       || query.itemKind
       || query.outdoorOnly
       || query.eventPeriod
+      || (query.dateFrom && query.dateTo)
       || query.keyword
       || query.openagendaOnly
     );
@@ -1391,6 +1415,7 @@
     if (query.itemKind) parts.push(`k:${query.itemKind}`);
     if (query.outdoorOnly) parts.push("out:1");
     if (query.eventPeriod) parts.push(`p:${query.eventPeriod}`);
+    if (query.dateFrom && query.dateTo) parts.push(`d:${query.dateFrom}:${query.dateTo}`);
     if (query.keyword) parts.push(`q:${query.keyword.toLowerCase()}`);
     if (query.openagendaOnly) parts.push("oa:1");
     return parts.join("|") || "all";
@@ -1407,6 +1432,8 @@
       itemKind = null,
       outdoorOnly = false,
       eventPeriod = null,
+      dateFrom = null,
+      dateTo = null,
       keyword = null,
       openagendaOnly = false,
       clientToday = null,
@@ -1420,6 +1447,8 @@
     if (itemKind && itemKind !== "all") sp.set("item_kind", itemKind);
     if (outdoorOnly) sp.set("outdoor_only", "1");
     if (eventPeriod) sp.set("event_period", eventPeriod);
+    if (dateFrom) sp.set("date_from", dateFrom);
+    if (dateTo) sp.set("date_to", dateTo);
     if (keyword) sp.set("keyword", keyword);
     if (openagendaOnly) sp.set("openagenda_only", "1");
     if (clientToday) sp.set("client_today", clientToday);
@@ -1872,6 +1901,7 @@
 
   async function setHotToday(on, { reload = true } = {}) {
     if (on) {
+      clearEventDateRange();
       state.filters.eventPeriod = "today";
       state.filters.liveEventsOnly = true;
       if (state.filters.kind === "all" || state.filters.kind === "activity") {
@@ -1903,6 +1933,7 @@
 
   async function setHotWeek(on, { reload = true } = {}) {
     if (on) {
+      clearEventDateRange();
       state.filters.eventPeriod = "hot_week";
       state.filters.liveEventsOnly = true;
       if (state.filters.kind === "all" || state.filters.kind === "activity") {
@@ -2446,27 +2477,142 @@
     quarter: "filter.time.quarter",
   };
 
+  function formatEventDateFilterLabel() {
+    const { eventDateFrom, eventDateTo } = state.filters;
+    if (!eventDateFrom || !eventDateTo) return "";
+    if (eventDateFrom === eventDateTo) return fmtDay(eventDateFrom);
+    return fmtRange(eventDateFrom, eventDateTo);
+  }
+
+  function clearEventDateRange() {
+    state.filters.eventDateFrom = null;
+    state.filters.eventDateTo = null;
+    calendarUi.anchor = null;
+  }
+
+  function applyEventDateRange(fromIso, toIso) {
+    const from = fromIso <= toIso ? fromIso : toIso;
+    const to = fromIso <= toIso ? toIso : fromIso;
+    state.filters.eventDateFrom = from;
+    state.filters.eventDateTo = to;
+    state.filters.eventPeriod = "all";
+    calendarUi.anchor = null;
+    deactivateHotFilterStorage();
+    closeTimeFilterMenu();
+    renderTimeFilter();
+    renderHotFilterButtons();
+    renderDiscover();
+    ensureFilteredResults();
+  }
+
+  function calendarMonthLabel(year, month) {
+    return new Intl.DateTimeFormat(I18N.dateLocale(), {
+      month: "long",
+      year: "numeric",
+    }).format(new Date(year, month, 1));
+  }
+
+  function calendarWeekdayLabels() {
+    const monday = new Date(2024, 0, 1);
+    return Array.from({ length: 7 }, (_, i) =>
+      new Intl.DateTimeFormat(I18N.dateLocale(), { weekday: "short" })
+        .format(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i))
+    );
+  }
+
+  function isoFromParts(year, month, day) {
+    const m = String(month + 1).padStart(2, "0");
+    const d = String(day).padStart(2, "0");
+    return `${year}-${m}-${d}`;
+  }
+
+  function isDateInRange(iso, fromIso, toIso) {
+    return iso >= fromIso && iso <= toIso;
+  }
+
+  function renderEventDateCalendar() {
+    const monthNode = $("#event-date-month");
+    const weekdaysNode = $("#event-date-weekdays");
+    const grid = $("#event-date-grid");
+    if (!monthNode || !weekdaysNode || !grid) return;
+
+    const { viewYear, viewMonth } = calendarUi;
+    const { eventDateFrom, eventDateTo } = state.filters;
+    const todayIso = localTodayISO();
+    const picking = calendarUi.anchor;
+
+    monthNode.textContent = calendarMonthLabel(viewYear, viewMonth);
+    weekdaysNode.innerHTML = calendarWeekdayLabels()
+      .map((label) => `<span>${esc(label)}</span>`)
+      .join("");
+
+    const firstDay = new Date(viewYear, viewMonth, 1);
+    const startPad = (firstDay.getDay() + 6) % 7;
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    grid.innerHTML = "";
+
+    for (let i = 0; i < startPad; i += 1) {
+      grid.appendChild(el("span", "date-calendar__pad", ""));
+    }
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const iso = isoFromParts(viewYear, viewMonth, day);
+      const btn = el("button", "date-calendar__day", String(day));
+      btn.type = "button";
+      btn.dataset.date = iso;
+      btn.setAttribute("role", "gridcell");
+      if (iso === todayIso) btn.classList.add("is-today");
+      if (eventDateFrom && eventDateTo && isDateInRange(iso, eventDateFrom, eventDateTo)) {
+        btn.classList.add("is-selected");
+      }
+      if (picking && iso === picking) {
+        btn.classList.add("is-anchor");
+      }
+      btn.addEventListener("click", () => onCalendarDayClick(iso));
+      grid.appendChild(btn);
+    }
+  }
+
+  function onCalendarDayClick(iso) {
+    if (!calendarUi.anchor) {
+      calendarUi.anchor = iso;
+      renderEventDateCalendar();
+      return;
+    }
+    if (calendarUi.anchor === iso) {
+      applyEventDateRange(iso, iso);
+      return;
+    }
+    applyEventDateRange(calendarUi.anchor, iso);
+  }
+
   function renderTimeFilter() {
     const label = $("#time-filter-label");
     const btn = $("#time-filter-btn");
     const period = state.filters.eventPeriod;
+    const customLabel = formatEventDateFilterLabel();
     if (label) {
-      label.textContent = t(TIME_PERIOD_LABELS[period] || TIME_PERIOD_LABELS.all);
+      label.textContent = customLabel || t(TIME_PERIOD_LABELS[period] || TIME_PERIOD_LABELS.all);
     }
     if (btn) {
       const disabled = state.filters.kind === "activity";
       btn.disabled = disabled;
       btn.classList.toggle("is-disabled", disabled);
+      btn.classList.toggle("is-active-range", Boolean(customLabel));
       btn.setAttribute("aria-disabled", disabled ? "true" : "false");
     }
+    const hasCustomDates = Boolean(state.filters.eventDateFrom && state.filters.eventDateTo);
     $$("#time-filter-menu .time-filter__option").forEach((opt) => {
-      opt.classList.toggle("is-active", opt.dataset.period === period);
-      opt.setAttribute("aria-selected", opt.dataset.period === period ? "true" : "false");
+      const active = !hasCustomDates && opt.dataset.period === period;
+      opt.classList.toggle("is-active", active);
+      opt.setAttribute("aria-selected", active ? "true" : "false");
     });
+    renderEventDateCalendar();
   }
 
   function setEventPeriod(period) {
     if (!TIME_PERIOD_LABELS[period]) return;
+    clearEventDateRange();
     state.filters.eventPeriod = period;
     if (period !== "today" && period !== "hot_week") {
       deactivateHotFilterStorage();
@@ -2484,6 +2630,7 @@
     if (!menu || !btn) return;
     menu.hidden = true;
     btn.setAttribute("aria-expanded", "false");
+    calendarUi.anchor = null;
   }
 
   function toggleTimeFilterMenu() {
@@ -2495,6 +2642,14 @@
     const open = menu.hidden;
     menu.hidden = !open;
     btn.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      const anchor = state.filters.eventDateFrom || localTodayISO();
+      const parts = anchor.split("-").map(Number);
+      calendarUi.viewYear = parts[0];
+      calendarUi.viewMonth = parts[1] - 1;
+      calendarUi.anchor = null;
+      renderEventDateCalendar();
+    }
   }
 
   /* ── pinned chips ────────────────────────────────────────────────────── */
@@ -2857,6 +3012,8 @@
       itemKind = null,
       outdoorOnly = false,
       eventPeriod = null,
+      dateFrom = null,
+      dateTo = null,
       keyword = null,
       openagendaOnly = false,
     } = {}
@@ -2875,6 +3032,7 @@
       || (itemKind && itemKind !== "all")
       || outdoorOnly
       || eventPeriod
+      || (dateFrom && dateTo)
       || keyword
       || openagendaOnly
     );
@@ -2886,6 +3044,8 @@
       itemKind,
       outdoorOnly,
       eventPeriod,
+      dateFrom,
+      dateTo,
       keyword,
       openagendaOnly,
       clientToday: localTodayISO(),
@@ -3331,6 +3491,36 @@
     $$("#time-filter-menu .time-filter__option").forEach((opt) => {
       opt.addEventListener("click", () => setEventPeriod(opt.dataset.period));
     });
+
+    $("#event-date-prev")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      calendarUi.viewMonth -= 1;
+      if (calendarUi.viewMonth < 0) {
+        calendarUi.viewMonth = 11;
+        calendarUi.viewYear -= 1;
+      }
+      renderEventDateCalendar();
+    });
+    $("#event-date-next")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      calendarUi.viewMonth += 1;
+      if (calendarUi.viewMonth > 11) {
+        calendarUi.viewMonth = 0;
+        calendarUi.viewYear += 1;
+      }
+      renderEventDateCalendar();
+    });
+    $("#event-date-clear")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      clearEventDateRange();
+      state.filters.eventPeriod = "all";
+      deactivateHotFilterStorage();
+      renderTimeFilter();
+      renderHotFilterButtons();
+      renderDiscover();
+      ensureFilteredResults();
+    });
+    $("#event-date-calendar")?.addEventListener("click", (e) => e.stopPropagation());
 
     document.addEventListener("click", (e) => {
       if (!e.target.closest("#time-filter")) closeTimeFilterMenu();

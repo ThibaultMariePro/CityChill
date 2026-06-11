@@ -126,6 +126,7 @@ Query parameters of note:
 | `item_kind` | Optional `event` or `activity` — narrows filtered pagination |
 | `outdoor_only=1` | Filtered pagination: outdoor items only |
 | `event_period` | `today`, `hot_week`, `week`, `month`, or `quarter` — events only (activities pass through) |
+| `date_from` / `date_to` | `YYYY-MM-DD` custom range (overrides `event_period` when both set) |
 | `keyword` | Text search across title, description, keyword, location, category label, tags |
 | `openagenda_only=1` | Filtered pagination: live OpenAgenda events only |
 | `client_today` | `YYYY-MM-DD` anchor for period filters (browser local date) |

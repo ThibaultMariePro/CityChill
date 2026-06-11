@@ -25,7 +25,11 @@ from app.i18n import (
     notice_no_activities,
 )
 from app.config import settings
-from app.discover_filters import paginate_discover_filtered, sorted_events
+from app.discover_filters import (
+    normalize_filter_dates,
+    paginate_discover_filtered,
+    sorted_events,
+)
 from app.models import (
     DiscoverPagination,
     DiscoverResponse,
@@ -387,6 +391,8 @@ async def discover(
     keyword: str | None = Query(default=None, max_length=120),
     openagenda_only: bool = Query(default=False),
     client_today: str | None = Query(default=None, max_length=10),
+    date_from: str | None = Query(default=None, max_length=10),
+    date_to: str | None = Query(default=None, max_length=10),
     lang: str = Query(default=DEFAULT_LANG, max_length=8),
 ) -> DiscoverResponse:
     client_key = _normalize_client_key(openagenda_key)
@@ -398,11 +404,13 @@ async def discover(
     filter_category = category if category in CATEGORIES else None
     filter_keyword = (keyword or "").strip() or None
     filter_period = event_period if event_period and event_period != "all" else None
+    filter_date_from, filter_date_to = normalize_filter_dates(date_from, date_to)
     has_filters = bool(
         filter_category
         or item_kind
         or outdoor_only
         or filter_period
+        or (filter_date_from and filter_date_to)
         or filter_keyword
         or openagenda_only
     )
@@ -528,6 +536,8 @@ async def discover(
                 item_kind=item_kind,
                 outdoor_only=outdoor_only,
                 event_period=filter_period,
+                date_from=filter_date_from,
+                date_to=filter_date_to,
                 keyword=filter_keyword,
                 openagenda_only=openagenda_only,
                 client_today=client_today,

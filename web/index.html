@@ -159,6 +159,19 @@
               <li role="presentation">
                 <button type="button" class="time-filter__option" data-period="quarter" role="option" data-i18n="filter.time.quarter">Next 3 months</button>
               </li>
+              <li class="time-filter__calendar" role="presentation">
+                <div class="date-calendar" id="event-date-calendar">
+                  <div class="date-calendar__nav">
+                    <button type="button" class="date-calendar__nav-btn" id="event-date-prev" data-i18n-aria="filter.calendar.prev" aria-label="Previous month">‹</button>
+                    <span class="date-calendar__month" id="event-date-month"></span>
+                    <button type="button" class="date-calendar__nav-btn" id="event-date-next" data-i18n-aria="filter.calendar.next" aria-label="Next month">›</button>
+                  </div>
+                  <div class="date-calendar__weekdays" id="event-date-weekdays" aria-hidden="true"></div>
+                  <div class="date-calendar__grid" id="event-date-grid" role="grid"></div>
+                  <p class="date-calendar__hint" data-i18n="filter.calendar.hint">Pick a start day, then an end day. Tap the same day twice for a single day.</p>
+                  <button type="button" class="date-calendar__clear" id="event-date-clear" data-i18n="filter.calendar.clear">Clear dates</button>
+                </div>
+              </li>
             </ul>
           </div>
           <button

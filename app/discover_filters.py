@@ -19,6 +19,26 @@ def sorted_events(events: list[Item]) -> list[Item]:
     )
 
 
+def normalize_filter_dates(
+    date_from: str | None, date_to: str | None
+) -> tuple[str | None, str | None]:
+    """Parse and order YYYY-MM-DD filter bounds."""
+    start = end = None
+    if date_from:
+        try:
+            start = date.fromisoformat(date_from[:10]).isoformat()
+        except ValueError:
+            start = None
+    if date_to:
+        try:
+            end = date.fromisoformat(date_to[:10]).isoformat()
+        except ValueError:
+            end = None
+    if start and end and start > end:
+        start, end = end, start
+    return start, end
+
+
 def _parse_client_today(value: str | None) -> date:
     if value:
         try:
@@ -45,6 +65,20 @@ def _add_days_iso(day_iso: str, days: int) -> str:
 
 def _start_of_week(ref: date) -> date:
     return ref - timedelta(days=ref.weekday())
+
+
+def _event_matches_date_range(item: Item, date_from: str, date_to: str) -> bool:
+    if item.kind != "event" or not item.start:
+        return False
+    start_iso = _iso_date_only(item.start)
+    end_iso = _iso_date_only(item.end or item.start)
+    if not start_iso or not end_iso:
+        return False
+    ev_start = date.fromisoformat(start_iso)
+    ev_end = date.fromisoformat(end_iso)
+    range_start = date.fromisoformat(date_from)
+    range_end = date.fromisoformat(date_to)
+    return ev_start <= range_end and ev_end >= range_start
 
 
 def _event_matches_period(item: Item, period: str, today: date) -> bool:
@@ -119,6 +153,8 @@ def item_matches_discover_filters(
     item_kind: str | None,
     outdoor_only: bool,
     event_period: str | None,
+    date_from: str | None,
+    date_to: str | None,
     keyword: str | None,
     openagenda_only: bool,
     client_today: date,
@@ -134,9 +170,13 @@ def item_matches_discover_filters(
         return False
     if openagenda_only and kind == "event" and "openagenda" not in (item.tags or []):
         return False
-    if event_period and event_period != "all" and kind == "event":
-        if not _event_matches_period(item, event_period, client_today):
-            return False
+    if kind == "event":
+        if date_from and date_to:
+            if not _event_matches_date_range(item, date_from, date_to):
+                return False
+        elif event_period and event_period != "all":
+            if not _event_matches_period(item, event_period, client_today):
+                return False
     if keyword and keyword.strip() and not _item_matches_keyword(item, keyword, lang):
         return False
     return True
@@ -149,6 +189,8 @@ def filtered_discover_items(
     item_kind: str | None = None,
     outdoor_only: bool = False,
     event_period: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     keyword: str | None = None,
     openagenda_only: bool = False,
     client_today: str | None = None,
@@ -164,6 +206,8 @@ def filtered_discover_items(
             item_kind=item_kind,
             outdoor_only=outdoor_only,
             event_period=event_period,
+            date_from=date_from,
+            date_to=date_to,
             keyword=keyword,
             openagenda_only=openagenda_only,
             client_today=today,
@@ -178,6 +222,8 @@ def filtered_discover_items(
             item_kind=item_kind,
             outdoor_only=outdoor_only,
             event_period=event_period,
+            date_from=date_from,
+            date_to=date_to,
             keyword=keyword,
             openagenda_only=openagenda_only,
             client_today=today,
@@ -196,6 +242,8 @@ def paginate_discover_filtered(
     item_kind: str | None = None,
     outdoor_only: bool = False,
     event_period: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     keyword: str | None = None,
     openagenda_only: bool = False,
     client_today: str | None = None,
@@ -208,6 +256,8 @@ def paginate_discover_filtered(
         item_kind=item_kind,
         outdoor_only=outdoor_only,
         event_period=event_period,
+        date_from=date_from,
+        date_to=date_to,
         keyword=keyword,
         openagenda_only=openagenda_only,
         client_today=client_today,
