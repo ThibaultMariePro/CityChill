@@ -715,13 +715,16 @@
     const curatedHint = isCuratedEvent(item)
       ? `<span class="card__curated-hint" title="${esc(t("card.curatedHint"))}" aria-label="${esc(t("card.curatedHint"))}">ℹ️</span>`
       : "";
+    const hints = [liveHint, curatedHint].filter(Boolean).join("");
+    const hintsHtml = hints ? `<div class="card__hints">${hints}</div>` : "";
     media.innerHTML = `
       <div class="card__topbar">
         <div class="card__header">
           <span class="card__emoji" aria-hidden="true">${meta.emoji}</span>
-          <p class="card__keyword">${esc(keyword)}</p>
-          ${liveHint}
-          ${curatedHint}
+          <div class="card__header-main">
+            <p class="card__keyword">${esc(keyword)}</p>
+            ${hintsHtml}
+          </div>
         </div>
         ${favButtonHtml(item)}
       </div>
