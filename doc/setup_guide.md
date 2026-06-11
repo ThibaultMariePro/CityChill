@@ -122,7 +122,7 @@ the built-in palettes:
 ```
 
 Built-in palettes: **sunset** (warm default), **citrus**, **berry**, **ember**,
-**ocean**, **forest**.
+**ocean**, **forest**, **cappuccino**, **lavender**, **honey**.
 
 Then just **refresh your browser** — no rebuild needed (the file is mounted into
 the container). The full palette CSS is loaded from `/api/theme.css` the first

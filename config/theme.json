@@ -182,6 +182,96 @@
         "border":     "#283820",
         "chip-bg":    "#212c20"
       }
+    },
+
+    "cappuccino": {
+      "label": "Cappuccino (coffee & cream)",
+      "brand": {
+        "coral":      "#b08968",
+        "coral-deep": "#6f4e37",
+        "amber":      "#ddb892",
+        "rose":       "#e6ccb2",
+        "plum":       "#a68a64",
+        "teal":       "#8f9779"
+      },
+      "light": {
+        "bg":         "#faf3eb",
+        "surface":    "#fffcf8",
+        "surface-2":  "#f0e6d8",
+        "text":       "#3e2723",
+        "text-soft":  "#6d4c41",
+        "border":     "#e0d0c0",
+        "chip-bg":    "#f0e6d8"
+      },
+      "dark": {
+        "bg":         "#1a120c",
+        "surface":    "#261a12",
+        "surface-2":  "#332318",
+        "text":       "#f5e6d3",
+        "text-soft":  "#a89080",
+        "border":     "#3d2e22",
+        "chip-bg":    "#332318"
+      }
+    },
+
+    "lavender": {
+      "label": "Lavender (soft lilac dusk)",
+      "brand": {
+        "coral":      "#9b8ec4",
+        "coral-deep": "#6b5b95",
+        "amber":      "#c9b8e8",
+        "rose":       "#c4a8d8",
+        "plum":       "#7c6aad",
+        "teal":       "#88b4c4"
+      },
+      "light": {
+        "bg":         "#f8f4ff",
+        "surface":    "#ffffff",
+        "surface-2":  "#efe8fa",
+        "text":       "#2a1f3d",
+        "text-soft":  "#6a5a80",
+        "border":     "#d8c8f0",
+        "chip-bg":    "#efe8fa"
+      },
+      "dark": {
+        "bg":         "#14101c",
+        "surface":    "#1c1628",
+        "surface-2":  "#261e34",
+        "text":       "#ece4f8",
+        "text-soft":  "#9a88b0",
+        "border":     "#342848",
+        "chip-bg":    "#261e34"
+      }
+    },
+
+    "honey": {
+      "label": "Honey (golden amber)",
+      "brand": {
+        "coral":      "#e9a319",
+        "coral-deep": "#c47f17",
+        "amber":      "#f5c842",
+        "rose":       "#e8a87c",
+        "plum":       "#d4a03c",
+        "teal":       "#7cb342"
+      },
+      "light": {
+        "bg":         "#fffbeb",
+        "surface":    "#ffffff",
+        "surface-2":  "#fff3cc",
+        "text":       "#3d2808",
+        "text-soft":  "#7a5520",
+        "border":     "#f0d878",
+        "chip-bg":    "#fff3cc"
+      },
+      "dark": {
+        "bg":         "#1a1408",
+        "surface":    "#241c0c",
+        "surface-2":  "#302610",
+        "text":       "#fdecc8",
+        "text-soft":  "#c0a050",
+        "border":     "#3d3010",
+        "chip-bg":    "#302610"
+      }
     }
   }
 }

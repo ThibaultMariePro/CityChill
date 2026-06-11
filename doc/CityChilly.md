@@ -70,7 +70,8 @@ or place name).
 - **Modern, warm design** — soft gradients, rounded cards and cozy colors.
 - **Customizable palette** — change the whole app's colors by editing a single
   file (`config/theme.json`); pick a preset like *sunset*, *citrus*, *berry*,
-  *ember*, *ocean* or *forest*, or define your own. See `setup_guide.md`.
+  *ember*, *ocean*, *forest*, *cappuccino*, *lavender*, or *honey*, or define
+  your own. See `setup_guide.md`.
 - **Works on phone and desktop** — the layout adapts to your screen.
 
 ---
