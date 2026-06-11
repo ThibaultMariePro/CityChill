@@ -940,7 +940,6 @@ a { color: inherit; }
 .btn--ghost { background: transparent; }
 .btn--in-agenda { background: color-mix(in srgb, var(--teal) 18%, var(--surface)); color: var(--teal); border-color: transparent; }
 .btn--compact { flex: 1 1 auto; min-width: 0; padding: 8px 10px; font-size: .78rem; }
-.btn--source { flex: 1 1 auto; }
 
 /* Category gradient backgrounds for card media — derived from the active
    palette variables so editing the palette config recolors everything. */

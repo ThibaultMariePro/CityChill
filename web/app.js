@@ -684,15 +684,8 @@
       utilityRow.append(searchLink);
     }
 
-    const source = el("a", "btn btn--ghost btn--compact btn--source");
-    source.href    = item.source_url;
-    source.target  = "_blank";
-    source.rel     = "noopener";
-    source.title   = t("card.sourceTitle", { name: item.source_name });
-    source.innerHTML = t("card.source");
-    utilityRow.append(source);
-
-    body.append(actions, utilityRow);
+    body.append(actions);
+    if (utilityRow.childElementCount) body.append(utilityRow);
     node.append(media, body);
     return node;
   }
