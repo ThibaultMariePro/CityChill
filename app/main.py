@@ -89,7 +89,12 @@ def _normalize_client_key(openagenda_key: str | None) -> str | None:
 def _paginate_discover(
     full: DiscoverResponse, offset: int, limit: int
 ) -> DiscoverResponse:
-    """Return a page of discover items (events by end date, then activities)."""
+    """Return a page of discover items.
+
+    Activities are returned in full on the first page only; subsequent pages
+    paginate events by end date so OSM activities are not buried behind hundreds
+    of live events.
+    """
     events = sorted(
         full.events,
         key=lambda i: (
@@ -98,13 +103,19 @@ def _paginate_discover(
             i.title.lower(),
         ),
     )
-    merged: list[tuple[str, Item]] = [("event", e) for e in events]
-    merged.extend(("activity", a) for a in full.activities)
-    total = len(merged)
-    page = merged[offset : offset + limit]
-    page_activities = [item for kind, item in page if kind == "activity"]
-    page_events = [item for kind, item in page if kind == "event"]
-    returned = len(page)
+    activities = full.activities
+    n_act = len(activities)
+    total = n_act + len(events)
+
+    if offset == 0:
+        page_activities = activities
+        page_events = events[:limit]
+    else:
+        page_activities = []
+        event_offset = max(0, offset - n_act)
+        page_events = events[event_offset : event_offset + limit]
+
+    returned = len(page_activities) + len(page_events)
     return DiscoverResponse(
         place=full.place,
         weather=full.weather,
@@ -138,6 +149,70 @@ def _openagenda_cache_tag(openagenda_key: str | None) -> str:
     if not key:
         return "oa-none"
     return "oa-" + hashlib.sha256(key.encode()).hexdigest()[:10]
+
+
+def _pin_cache_base(place: Place, effective_city: str, lng: str) -> str:
+    return (
+        f"discover::pin::{_make_pin_id(place.latitude, place.longitude)}::"
+        f"{effective_city.lower()}::{lng}"
+    )
+
+
+async def _fetch_weather_cached(pin_base: str, place: Place, lng: str) -> Weather:
+    key = f"{pin_base}::weather"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    try:
+        weather = await get_weather(place.latitude, place.longitude, lang=lng)
+    except BaseException:
+        weather = Weather(source_url="https://open-meteo.com/", days=[])
+    cache.set(key, weather)
+    return weather
+
+
+async def _fetch_activities_cached(
+    pin_base: str, place: Place
+) -> tuple[list[Item], bool]:
+    """Return (activities, degraded). Degraded rows are not cached."""
+    key = f"{pin_base}::activities"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached, False
+    try:
+        activities = await get_activities(
+            place, limit=settings.DISCOVER_MAX_ACTIVITIES
+        )
+    except BaseException:
+        return [], True
+    cache.set(key, activities)
+    return activities, False
+
+
+async def _fetch_events_cached(
+    pin_base: str,
+    place: Place,
+    *,
+    client_key: str | None,
+    lng: str,
+    city_name: str | None,
+    live_only: bool,
+) -> tuple[list[Item], list[str]]:
+    oa_tag = _openagenda_cache_tag(client_key)
+    live_tag = "live" if live_only else "all"
+    key = f"{pin_base}::events::{oa_tag}::{live_tag}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    result = await get_events(
+        place,
+        openagenda_key=client_key,
+        lang=lng,
+        city_name=city_name,
+        live_only=live_only,
+    )
+    cache.set(key, result)
+    return result
 
 
 def _attach_weather(items: list[Item], weather) -> None:
@@ -335,35 +410,26 @@ async def discover(
             except Exception:
                 raise HTTPException(status_code=502, detail=geocode_unavailable(lng))
 
+        pin_base = _pin_cache_base(place, effective_city, lng)
         weather, activities_result, events_result = await asyncio.gather(
-            get_weather(place.latitude, place.longitude, lang=lng),
-            get_activities(place, limit=settings.DISCOVER_MAX_ACTIVITIES),
-            get_events(
+            _fetch_weather_cached(pin_base, place, lng),
+            _fetch_activities_cached(pin_base, place),
+            _fetch_events_cached(
+                pin_base,
                 place,
-                openagenda_key=client_key,
-                lang=lng,
+                client_key=client_key,
+                lng=lng,
                 city_name=city_name or (city or "").strip() or None,
                 live_only=live_events_only,
             ),
-            return_exceptions=True,
         )
 
-        if isinstance(weather, BaseException):
-            weather = Weather(source_url="https://open-meteo.com/", days=[])
-        if isinstance(events_result, BaseException):
-            events, notices = [], []
-        else:
-            events, notices = events_result
-
-        activities_degraded = False
-        if isinstance(activities_result, BaseException):
-            activities = []
-            activities_degraded = True
+        activities, activities_degraded = activities_result
+        events, notices = events_result
+        if activities_degraded:
             notices.append(notice_activities_degraded(lng))
-        else:
-            activities = activities_result
-            if not activities:
-                notices.append(notice_no_activities(place.name, lng))
+        elif not activities:
+            notices.append(notice_no_activities(place.name, lng))
 
         _attach_weather(activities, weather)
         _attach_weather(events, weather)

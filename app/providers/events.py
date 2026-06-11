@@ -46,6 +46,8 @@ _OA_MAX_PAGES = 10
 _OA_PRIMARY_METRO_AGENDA_CAP = 500
 _OA_SECONDARY_AGENDA_CAP = 60
 _OA_FETCH_CONCURRENCY = 8
+# When the primary metro feed already returned plenty, skip slower agenda scans.
+_OA_ENOUGH_EVENTS = 80
 
 
 class OpenAgendaAuthError(Exception):
@@ -499,6 +501,9 @@ async def _fetch_openagenda_raw(
             logger.warning("OpenAgenda priority agenda %s failed: %s", uid, exc)
         if len(collected) >= _OA_MAX_EVENTS:
             return collected
+
+    if len(collected) >= _OA_ENOUGH_EVENTS:
+        return collected
 
     # Phase 1: other agendas around the pin (capped per agenda).
     geo_params = _oa_event_params(lang, lat=lat, lon=lon)

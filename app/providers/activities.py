@@ -35,7 +35,7 @@ def _build_query(lat: float, lon: float, radius: int = 7000) -> str:
     body = "\n".join(parts)
     # A higher output cap captures area features (parks, gardens, museums) that
     # OSM returns after point POIs such as bars and cafes.
-    return f"[out:json][timeout:25];\n(\n{body}\n);\nout center 800;"
+    return f"[out:json][timeout:18];\n(\n{body}\n);\nout center 800;"
 
 
 def _categorise(tags: dict[str, str]) -> str | None:

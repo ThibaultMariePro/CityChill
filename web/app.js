@@ -740,6 +740,10 @@
 
   function sortDiscoverItems(items) {
     return [...items].sort((a, b) => {
+      if (a.kind !== b.kind) {
+        if (a.kind === "activity") return -1;
+        if (b.kind === "activity") return 1;
+      }
       if (a.kind === "event" && b.kind === "event") {
         const byEnd = eventEndSortKey(a).localeCompare(eventEndSortKey(b));
         if (byEnd !== 0) return byEnd;
@@ -747,8 +751,6 @@
         if (byStart !== 0) return byStart;
         return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
       }
-      if (a.kind === "event") return -1;
-      if (b.kind === "event") return 1;
       return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
     });
   }
