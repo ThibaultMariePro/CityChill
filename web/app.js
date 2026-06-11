@@ -28,6 +28,8 @@
 
   const API = "";
   const DISCOVER_PAGE_SIZE = 40;
+  const MIN_CATEGORY_RESULTS = 12;
+  const MAX_CATEGORY_FETCH_ROUNDS = 25;
   let defaultCountry = "France";
   const LS = {
     theme:     "citychilly:theme",
@@ -62,6 +64,7 @@
     refreshInFlight: false,
     loadMoreInFlight: false,
     eventsLoading: false,
+    filterFetchInFlight: false,
     oaRenderRetry: false,
     tab: "discover",
     keySpecs: [],
@@ -104,6 +107,7 @@
   let acController   = null;
   let acSuggestions  = [];
   let loadGeneration = 0;
+  let filterFetchGeneration = 0;
 
   /* ── tiny helpers ────────────────────────────────────────────────────── */
   const $ = (sel) => document.querySelector(sel);
@@ -928,7 +932,12 @@
 
     const shownLive = items.filter((it) => isLiveEvent(it)).length;
     if (hint) {
-      if (state.eventsLoading) {
+      if (state.filterFetchInFlight) {
+        const cat = state.categories.find((c) => c.id === state.filters.category);
+        const catLabel = cat ? `${cat.emoji} ${cat.label}` : state.filters.category;
+        hint.hidden = false;
+        hint.textContent = t("loading.categoryMore", { category: catLabel });
+      } else if (state.eventsLoading) {
         hint.hidden = false;
         hint.textContent = t("loading.events");
       } else if (raw.live > 0 && shownLive === 0) {
@@ -1292,12 +1301,21 @@
 
   function appendDiscoverParams(
     sp,
-    { forDiscover = false, offset = 0, limit = DISCOVER_PAGE_SIZE, scope = "all" } = {}
+    {
+      forDiscover = false,
+      offset = 0,
+      limit = DISCOVER_PAGE_SIZE,
+      scope = "all",
+      category = null,
+      itemKind = null,
+    } = {}
   ) {
     appendApiKeysToSearchParams(sp);
     appendLangToSearchParams(sp);
     if (defaultCountry) sp.set("country", defaultCountry);
     if (scope && scope !== "all") sp.set("scope", scope);
+    if (category && category !== "all") sp.set("category", category);
+    if (itemKind && itemKind !== "all") sp.set("item_kind", itemKind);
     if (forDiscover && state.filters.liveEventsOnly) {
       sp.set("live_events_only", "1");
     }
@@ -1327,6 +1345,128 @@
       if (pag) return sum + acts + pag.total;
       return sum + acts + (data.events?.length || 0);
     }, 0);
+  }
+
+  function getCategoryPagination(pinId, category) {
+    return state.pinData[pinId]?.categoryPagination?.[category] || null;
+  }
+
+  function setCategoryPagination(pinId, category, pagination) {
+    const data = state.pinData[pinId];
+    if (!data || !pagination) return;
+    data.categoryPagination = data.categoryPagination || {};
+    data.categoryPagination[category] = pagination;
+  }
+
+  function categoryHasMore(pinId, category) {
+    const pag = getCategoryPagination(pinId, category);
+    if (!pag) return true;
+    return Boolean(pag.has_more);
+  }
+
+  function mergeCategoryPage(pinId, category, page) {
+    const cur = state.pinData[pinId];
+    if (!cur) {
+      state.pinData[pinId] = {
+        ...page,
+        categoryPagination: page.pagination ? { [category]: page.pagination } : {},
+      };
+      return;
+    }
+    const seen = new Set([
+      ...(cur.events || []).map((item) => item.id),
+      ...(cur.activities || []).map((item) => item.id),
+    ]);
+    for (const item of [...(page.activities || []), ...(page.events || [])]) {
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      if (item.kind === "event") {
+        cur.events = cur.events || [];
+        cur.events.push(item);
+      } else {
+        cur.activities = cur.activities || [];
+        cur.activities.push(item);
+      }
+    }
+    if (page.pagination) setCategoryPagination(pinId, category, page.pagination);
+  }
+
+  async function loadNextCategoryPage() {
+    const category = state.filters.category;
+    if (category === "all") return false;
+
+    const zoneIds = activeZonePinIds();
+    const pinsToFetch = state.pins.filter((pin) => {
+      if (zoneIds && !zoneIds.has(pin.id)) return false;
+      if (!state.pinData[pin.id]) return false;
+      return categoryHasMore(pin.id, category);
+    });
+    if (!pinsToFetch.length) return false;
+
+    const itemKind = state.filters.kind === "all" ? null : state.filters.kind;
+    state.loadMoreInFlight = true;
+    updateLoadMoreButton();
+
+    try {
+      const results = await Promise.all(
+        pinsToFetch.map(async (pin) => {
+          const pag = getCategoryPagination(pin.id, category);
+          const offset = pag ? (pag.offset || 0) + (pag.returned || 0) : 0;
+          try {
+            const data = await fetchDiscoverForPin(pin, {
+              offset,
+              scope: "all",
+              category,
+              itemKind,
+            });
+            return { pin, data, error: null };
+          } catch (error) {
+            return { pin, data: null, error };
+          }
+        })
+      );
+
+      let loadedAny = false;
+      for (const { pin, data, error } of results) {
+        if (error || !data) continue;
+        mergeCategoryPage(pin.id, category, stampDiscoverCity(data, pin));
+        loadedAny = true;
+      }
+      return loadedAny;
+    } finally {
+      state.loadMoreInFlight = false;
+      updateLoadMoreButton();
+    }
+  }
+
+  async function ensureFilteredResults() {
+    const gen = ++filterFetchGeneration;
+    const category = state.filters.category;
+    if (category === "all" || !state.pins.length || state.eventsLoading) return;
+
+    state.filterFetchInFlight = true;
+    renderDiscover();
+
+    let rounds = 0;
+    try {
+      while (
+        gen === filterFetchGeneration &&
+        rounds < MAX_CATEGORY_FETCH_ROUNDS &&
+        filteredItems().length < MIN_CATEGORY_RESULTS &&
+        state.pins.some((pin) => categoryHasMore(pin.id, category))
+      ) {
+        const loaded = await loadNextCategoryPage();
+        if (!loaded) break;
+        rounds += 1;
+        if (gen !== filterFetchGeneration) return;
+        renderDiscover();
+      }
+    } finally {
+      if (gen === filterFetchGeneration) {
+        state.filterFetchInFlight = false;
+        renderDiscover();
+      }
+    }
   }
 
   function mergeDiscoverEvents(pinId, page, { append = false } = {}) {
@@ -2150,6 +2290,7 @@
     state.filters.category = id;
     renderChips();
     renderDiscover();
+    if (id !== "all") ensureFilteredResults();
   }
 
   const TIME_PERIOD_LABELS = {
@@ -2190,6 +2331,7 @@
     renderTimeFilter();
     renderHotFilterButtons();
     renderDiscover();
+    if (state.filters.category !== "all") ensureFilteredResults();
   }
 
   function closeTimeFilterMenu() {
@@ -2560,7 +2702,13 @@
 
   async function fetchDiscoverForPin(
     pin,
-    { refresh = false, offset = 0, scope = "all" } = {}
+    {
+      refresh = false,
+      offset = 0,
+      scope = "all",
+      category = null,
+      itemKind = null,
+    } = {}
   ) {
     const placeName = pin.postcode ? `${pin.postcode} · ${pin.name}` : pin.name;
     const params = {
@@ -2572,9 +2720,11 @@
       params.city_name = pin.name;
     }
     const sp = appendDiscoverParams(new URLSearchParams(params), {
-      forDiscover: scope === "events" || scope === "all",
+      forDiscover: scope === "events" || scope === "all" || Boolean(category),
       offset,
       scope,
+      category,
+      itemKind,
     });
     if (refresh) sp.set("refresh", "1");
     const res = await fetch(`${API}/api/discover?${sp}`);
@@ -2702,6 +2852,7 @@
       renderWeather();
       renderWarnings();
       renderActivePanel();
+      if (state.filters.category !== "all") ensureFilteredResults();
       if (refresh && gen === loadGeneration && Object.keys(state.pinData).length) {
         toast(t("toast.refreshDone"));
         checkApiHealth({ force: true });
@@ -2971,6 +3122,7 @@
         }
         syncKindFilterUI();
         renderDiscover();
+        if (state.filters.category !== "all") ensureFilteredResults();
       })
     );
 
@@ -3018,6 +3170,7 @@
     $("#outdoor-only").addEventListener("change", (e) => {
       state.filters.outdoorOnly = e.target.checked;
       renderDiscover();
+      if (state.filters.category !== "all") ensureFilteredResults();
     });
 
     $("#theme-toggle").addEventListener("click", () => {
