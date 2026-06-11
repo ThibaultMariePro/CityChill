@@ -119,6 +119,28 @@
           </div>
           <button
             type="button"
+            class="hot-today-btn"
+            id="hot-today-btn"
+            aria-pressed="false"
+            data-i18n-title="filter.hotTodayTitle"
+            title="Live OpenAgenda events happening today"
+          >
+            <span class="hot-today-btn__icon" aria-hidden="true">🔥</span>
+            <span class="hot-today-btn__label" data-i18n="filter.hotToday">Hot today</span>
+          </button>
+          <button
+            type="button"
+            class="hot-week-btn"
+            id="hot-week-btn"
+            aria-pressed="false"
+            data-i18n-title="filter.hotWeekTitle"
+            title="Live events ending within the next 7 days"
+          >
+            <span class="hot-week-btn__icon" aria-hidden="true">📅</span>
+            <span class="hot-week-btn__label" data-i18n="filter.hotWeek">Hot this week</span>
+          </button>
+          <button
+            type="button"
             class="refresh-btn"
             id="discover-refresh"
             data-i18n-title="filter.refreshTitle"

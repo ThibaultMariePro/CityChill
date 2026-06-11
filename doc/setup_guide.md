@@ -53,8 +53,9 @@ docker compose down
    **ℹ️**.
 3. **Filter** by category (the colored chips), by type
    (**All / Events / Activities**), by **time period** (week / month / quarter),
-   flip **Outdoor only**, or enable **Live events only** to hide curated
-   highlights and show only OpenAgenda results.
+   flip **Outdoor only**, enable **Live events only** to hide curated highlights,
+   tap **🔥 Hot today** for single-day live events today, or **📅 Hot this week**
+   for live events ending within the next 7 days.
 4. **Load more** — when additional results are available, use **Load more** below
    the card grid to fetch the next page (40 items at a time by default).
 5. **Refresh** — use the ↻ button next to the filters to re-fetch live events

@@ -32,6 +32,8 @@
     lang:             "citychilly:lang",
     dismissedNotices: "citychilly:dismissedNotices",
     liveEventsOnly: "citychilly:liveEventsOnly",
+    hotToday: "citychilly:hotToday",
+    hotWeek: "citychilly:hotWeek",
   };
 
   /* ── state ───────────────────────────────────────────────────────────── */
@@ -185,9 +187,56 @@
     return `${fmtDay(start)} – ${fmtDay(end)}`;
   };
 
+  function fmtEventDateMeta(item) {
+    if (item.kind !== "event") return "";
+    if (isHotWeekActive()) {
+      const end = item.end || item.start;
+      if (end) {
+        return `<span class="card__date card__date--ends">🗓️ ${esc(t("card.ends", { day: fmtDay(end) }))}</span>`;
+      }
+    }
+    return `<span>🗓️ ${esc(fmtRange(item.start, item.end))}</span>`;
+  }
+
   const parseISODate = (iso) => {
     const [y, m, d] = String(iso).split("T")[0].split("-").map(Number);
     return new Date(y, m - 1, d);
+  };
+
+  const isoDateOnly = (iso) => String(iso || "").split("T")[0];
+
+  const localTodayISO = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const addDaysISO = (iso, days) => {
+    const d = parseISODate(iso);
+    d.setDate(d.getDate() + days);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  /** True when the event is exactly one day long and that day is `dayIso`. */
+  const eventIsSingleDayOn = (item, dayIso) => {
+    const start = isoDateOnly(item.start);
+    if (!start) return false;
+    const end = isoDateOnly(item.end || item.start);
+    return start === end && start === dayIso;
+  };
+
+  /** True when the event end date falls within the next 7 days (today inclusive). */
+  const eventEndsWithinNextSevenDays = (item) => {
+    const endIso = isoDateOnly(item.end || item.start);
+    if (!endIso) return false;
+    const today = localTodayISO();
+    const lastDay = addDaysISO(today, 6);
+    return endIso >= today && endIso <= lastDay;
   };
 
   const startOfWeek = (ref = new Date()) => {
@@ -215,6 +264,11 @@
   const eventPeriodBounds = (period) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    if (period === "today") {
+      const end = new Date(today);
+      end.setHours(23, 59, 59, 999);
+      return { start: today, end };
+    }
     if (period === "week") {
       return { start: startOfWeek(today), end: endOfWeek(today) };
     }
@@ -233,6 +287,12 @@
   const eventMatchesPeriod = (item, period) => {
     if (period === "all" || item.kind !== "event") return true;
     if (!item.start) return false;
+    if (period === "today") {
+      return eventIsSingleDayOn(item, localTodayISO());
+    }
+    if (period === "hot_week") {
+      return eventEndsWithinNextSevenDays(item);
+    }
     const bounds = eventPeriodBounds(period);
     if (!bounds) return true;
     const evStart = parseISODate(item.start);
@@ -518,7 +578,7 @@
 
     const body    = el("div", "card__body");
     const metaBits = [];
-    if (item.kind === "event")  metaBits.push(`<span>🗓️ ${esc(fmtRange(item.start, item.end))}</span>`);
+    if (item.kind === "event") metaBits.push(fmtEventDateMeta(item));
     if (item.location_name)     metaBits.push(`<span>📍 ${esc(item.location_name)}</span>`);
     metaBits.push(`<span>${meta.emoji} ${esc(meta.label)}</span>`);
 
@@ -1290,6 +1350,40 @@
     return serverConfigured || Boolean(readParams().openagenda_key?.trim());
   }
 
+  function isHotTodayActive() {
+    return state.filters.liveEventsOnly && state.filters.eventPeriod === "today";
+  }
+
+  function isHotWeekActive() {
+    return state.filters.liveEventsOnly && state.filters.eventPeriod === "hot_week";
+  }
+
+  function deactivateHotFilterStorage() {
+    localStorage.setItem(LS.hotToday, "0");
+    localStorage.setItem(LS.hotWeek, "0");
+  }
+
+  function renderHotTodayButton() {
+    const btn = $("#hot-today-btn");
+    if (!btn) return;
+    btn.classList.toggle("is-active", isHotTodayActive());
+    btn.title = t("filter.hotTodayTitle");
+    btn.setAttribute("aria-pressed", isHotTodayActive() ? "true" : "false");
+  }
+
+  function renderHotWeekButton() {
+    const btn = $("#hot-week-btn");
+    if (!btn) return;
+    btn.classList.toggle("is-active", isHotWeekActive());
+    btn.title = t("filter.hotWeekTitle");
+    btn.setAttribute("aria-pressed", isHotWeekActive() ? "true" : "false");
+  }
+
+  function renderHotFilterButtons() {
+    renderHotTodayButton();
+    renderHotWeekButton();
+  }
+
   function renderLiveEventsToggle() {
     const input = $("#live-events-only");
     const wrap = input?.closest(".switch--live");
@@ -1299,6 +1393,7 @@
     input.disabled = false;
     wrap.classList.remove("is-disabled");
     wrap.title = hasKey ? t("filter.liveTitle") : t("filter.liveNoKey");
+    renderHotFilterButtons();
   }
 
   function syncKindFilterUI() {
@@ -1311,16 +1406,83 @@
   async function setLiveEventsOnly(on, { reload = true } = {}) {
     state.filters.liveEventsOnly = Boolean(on);
     localStorage.setItem(LS.liveEventsOnly, on ? "1" : "0");
+    if (!on && (state.filters.eventPeriod === "today" || state.filters.eventPeriod === "hot_week")) {
+      state.filters.eventPeriod = "all";
+      deactivateHotFilterStorage();
+    }
     if (on && state.filters.kind === "all") {
       state.filters.kind = "event";
       syncKindFilterUI();
     }
     renderLiveEventsToggle();
+    renderTimeFilter();
     if (on && !hasOpenAgendaKey()) toast(t("filter.liveNoKey"));
     else if (on) toast(t("toast.liveOn"));
     else toast(t("toast.liveOff"));
     if (reload && state.pins.length) await reloadSelection();
     else renderDiscover();
+  }
+
+  async function setHotToday(on, { reload = true } = {}) {
+    if (on) {
+      state.filters.eventPeriod = "today";
+      state.filters.liveEventsOnly = true;
+      if (state.filters.kind === "all" || state.filters.kind === "activity") {
+        state.filters.kind = "event";
+      }
+      localStorage.setItem(LS.liveEventsOnly, "1");
+      localStorage.setItem(LS.hotToday, "1");
+      localStorage.setItem(LS.hotWeek, "0");
+    } else {
+      state.filters.eventPeriod = "all";
+      state.filters.liveEventsOnly = false;
+      localStorage.setItem(LS.liveEventsOnly, "0");
+      deactivateHotFilterStorage();
+    }
+    renderHotFilterButtons();
+    renderLiveEventsToggle();
+    renderTimeFilter();
+    syncKindFilterUI();
+    if (on && !hasOpenAgendaKey()) toast(t("filter.liveNoKey"));
+    else if (on) toast(t("toast.hotTodayOn"));
+    else toast(t("toast.hotTodayOff"));
+    if (reload && state.pins.length) {
+      if (on) await reloadSelection();
+      else renderDiscover();
+    } else {
+      renderDiscover();
+    }
+  }
+
+  async function setHotWeek(on, { reload = true } = {}) {
+    if (on) {
+      state.filters.eventPeriod = "hot_week";
+      state.filters.liveEventsOnly = true;
+      if (state.filters.kind === "all" || state.filters.kind === "activity") {
+        state.filters.kind = "event";
+      }
+      localStorage.setItem(LS.liveEventsOnly, "1");
+      localStorage.setItem(LS.hotWeek, "1");
+      localStorage.setItem(LS.hotToday, "0");
+    } else {
+      state.filters.eventPeriod = "all";
+      state.filters.liveEventsOnly = false;
+      localStorage.setItem(LS.liveEventsOnly, "0");
+      deactivateHotFilterStorage();
+    }
+    renderHotFilterButtons();
+    renderLiveEventsToggle();
+    renderTimeFilter();
+    syncKindFilterUI();
+    if (on && !hasOpenAgendaKey()) toast(t("filter.liveNoKey"));
+    else if (on) toast(t("toast.hotWeekOn"));
+    else toast(t("toast.hotWeekOff"));
+    if (reload && state.pins.length) {
+      if (on) await reloadSelection();
+      else renderDiscover();
+    } else {
+      renderDiscover();
+    }
   }
 
   async function loadKeySpecs() {
@@ -1573,6 +1735,8 @@
 
   const TIME_PERIOD_LABELS = {
     all: "filter.time.all",
+    today: "filter.time.today",
+    hot_week: "filter.time.hotWeek",
     week: "filter.time.week",
     month: "filter.time.month",
     quarter: "filter.time.quarter",
@@ -1600,8 +1764,12 @@
   function setEventPeriod(period) {
     if (!TIME_PERIOD_LABELS[period]) return;
     state.filters.eventPeriod = period;
+    if (period !== "today" && period !== "hot_week") {
+      deactivateHotFilterStorage();
+    }
     closeTimeFilterMenu();
     renderTimeFilter();
+    renderHotFilterButtons();
     renderDiscover();
   }
 
@@ -2296,6 +2464,14 @@
     $$("#kind-filter .seg").forEach((b) =>
       b.addEventListener("click", () => {
         state.filters.kind = b.dataset.kind;
+        if (b.dataset.kind !== "event" && (isHotTodayActive() || isHotWeekActive())) {
+          state.filters.eventPeriod = "all";
+          state.filters.liveEventsOnly = false;
+          localStorage.setItem(LS.liveEventsOnly, "0");
+          deactivateHotFilterStorage();
+          renderHotFilterButtons();
+          renderLiveEventsToggle();
+        }
         syncKindFilterUI();
         renderDiscover();
       })
@@ -2320,6 +2496,8 @@
 
     $("#discover-refresh")?.addEventListener("click", () => refreshOpenAgenda());
     $("#discover-load-more")?.addEventListener("click", () => loadMoreDiscover());
+    $("#hot-today-btn")?.addEventListener("click", () => setHotToday(!isHotTodayActive()));
+    $("#hot-week-btn")?.addEventListener("click", () => setHotWeek(!isHotWeekActive()));
 
     $("#live-events-only")?.addEventListener("change", (e) => {
       setLiveEventsOnly(e.target.checked);
@@ -2440,13 +2618,22 @@
     applyTheme(theme);
 
     wire();
-    state.filters.liveEventsOnly = localStorage.getItem(LS.liveEventsOnly) === "1";
-    if (state.filters.liveEventsOnly && state.filters.kind === "all") {
+    const hotToday = localStorage.getItem(LS.hotToday) === "1";
+    const hotWeek = localStorage.getItem(LS.hotWeek) === "1";
+    state.filters.liveEventsOnly = hotToday || hotWeek || localStorage.getItem(LS.liveEventsOnly) === "1";
+    if (hotToday) {
+      state.filters.eventPeriod = "today";
+      state.filters.kind = "event";
+    } else if (hotWeek) {
+      state.filters.eventPeriod = "hot_week";
+      state.filters.kind = "event";
+    } else if (state.filters.liveEventsOnly && state.filters.kind === "all") {
       state.filters.kind = "event";
     }
     syncKindFilterUI();
     renderTimeFilter();
     renderLiveEventsToggle();
+    renderHotFilterButtons();
     refreshCounts();
     updateAgendaExportBar();
     renderChips();
