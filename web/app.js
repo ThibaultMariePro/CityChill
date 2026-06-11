@@ -971,6 +971,7 @@
     }
 
     const raw = rawDiscoverCounts();
+    syncDiscoverLoadingHint(raw);
     if (
       !state.oaRenderRetry
       && !state.refreshInFlight
@@ -1010,17 +1011,6 @@
     meta.innerHTML = detailParts.length
       ? `${esc(headline)}<span class="results-meta__detail">${esc(detailParts.join(" · "))}</span>`
       : esc(headline);
-
-    const shownLive = items.filter((it) => isLiveEvent(it)).length;
-    if (state.filterFetchInFlight) {
-      setResultsFilterHint(t("loading.filterMore"), { loading: true });
-    } else if (state.eventsLoading) {
-      setResultsFilterHint(t("loading.events"), { loading: true });
-    } else if (raw.live > 0 && shownLive === 0) {
-      setResultsFilterHint(t("results.filterHidesLive", { count: raw.live }));
-    } else {
-      setResultsFilterHint("");
-    }
 
     if (!items.length) {
       empty.hidden = false;
@@ -1641,6 +1631,19 @@
     hint.classList.toggle("is-loading", loading);
     if (text) text.textContent = message;
     if (spinner) spinner.hidden = !loading;
+  }
+
+  function syncDiscoverLoadingHint(raw) {
+    const shownLive = filteredItems().filter((it) => isLiveEvent(it)).length;
+    if (state.filterFetchInFlight) {
+      setResultsFilterHint(t("loading.filterMore"), { loading: true });
+    } else if (state.eventsLoading) {
+      setResultsFilterHint(t("loading.events"), { loading: true });
+    } else if (raw.live > 0 && shownLive === 0) {
+      setResultsFilterHint(t("results.filterHidesLive", { count: raw.live }));
+    } else {
+      setResultsFilterHint("");
+    }
   }
 
   function updateLoadMoreButton() {
@@ -3035,6 +3038,7 @@
       if (gen === loadGeneration) {
         showLoading(false);
         state.eventsLoading = false;
+        renderActivePanel();
       }
       if (refresh) {
         state.refreshInFlight = false;
@@ -3158,6 +3162,7 @@
     } finally {
       state.eventsLoading = false;
       showLoading(false);
+      renderActivePanel();
     }
   }
 
