@@ -1141,8 +1141,8 @@ a { color: inherit; }
   position: relative;
   z-index: 2;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   border: 1.5px solid color-mix(in srgb, var(--text) 22%, var(--border));
   cursor: pointer;
@@ -1155,8 +1155,8 @@ a { color: inherit; }
   transition: transform .15s ease, background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
 }
 .card__fav-icon {
-  width: 17px;
-  height: 17px;
+  width: 22px;
+  height: 22px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
