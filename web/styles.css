@@ -21,6 +21,7 @@
 
   --font-display: "Fraunces", Georgia, serif;
   --font-body: "Inter", system-ui, -apple-system, Segoe UI, sans-serif;
+  --font-card-title: "Plus Jakarta Sans", var(--font-body);
   --maxw: 1180px;
 }
 
@@ -1292,7 +1293,15 @@ a { color: inherit; }
 }
 
 .card__body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
-.card__title { font-family: var(--font-display); font-size: 1.38rem; font-weight: 600; margin: 0; line-height: 1.22; }
+.card__title {
+  font-family: var(--font-card-title);
+  font-size: 1.38rem;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
 .card__desc { font-size: .87rem; color: var(--text-soft); margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .card__meta { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: .8rem; color: var(--text-soft); margin-top: 2px; }
 .card__meta span { display: inline-flex; align-items: center; gap: 5px; }
