@@ -1184,13 +1184,13 @@ a { color: inherit; }
 .card:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
 
 .card__media {
-  min-height: 92px;
+  min-height: 86px;
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 10px;
-  padding: 12px 14px 10px;
+  gap: 6px;
+  padding: 10px 14px 8px;
   color: #fff;
 }
 .card__media::after {
@@ -1209,7 +1209,7 @@ a { color: inherit; }
 .card__header {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   flex: 1;
 }
@@ -1292,7 +1292,7 @@ a { color: inherit; }
 }
 
 .card__body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
-.card__title { font-family: var(--font-display); font-size: 1.24rem; font-weight: 600; margin: 0; line-height: 1.25; }
+.card__title { font-family: var(--font-display); font-size: 1.38rem; font-weight: 600; margin: 0; line-height: 1.22; }
 .card__desc { font-size: .87rem; color: var(--text-soft); margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .card__meta { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: .8rem; color: var(--text-soft); margin-top: 2px; }
 .card__meta span { display: inline-flex; align-items: center; gap: 5px; }
