@@ -89,8 +89,15 @@ def _normalize_client_key(openagenda_key: str | None) -> str | None:
 def _paginate_discover(
     full: DiscoverResponse, offset: int, limit: int
 ) -> DiscoverResponse:
-    """Return a page of discover items (events by date, then activities)."""
-    events = sorted(full.events, key=lambda i: (i.start or "9999-12-31", i.title.lower()))
+    """Return a page of discover items (events by end date, then activities)."""
+    events = sorted(
+        full.events,
+        key=lambda i: (
+            i.end or i.start or "9999-12-31",
+            i.start or "",
+            i.title.lower(),
+        ),
+    )
     merged: list[tuple[str, Item]] = [("event", e) for e in events]
     merged.extend(("activity", a) for a in full.activities)
     total = len(merged)

@@ -52,6 +52,15 @@ def _make_id(value: str) -> str:
     return "evt-" + hashlib.sha1(value.encode("utf-8")).hexdigest()[:12]
 
 
+def _event_sort_key(item: Item) -> tuple[str, str, str]:
+    """Nearest end date first, then start, then title."""
+    return (
+        item.end or item.start or "9999-12-31",
+        item.start or "",
+        item.title.lower(),
+    )
+
+
 def _city_file_key(name: str) -> str:
     """Normalize a geocoded city name to a curated JSON filename stem."""
     key = name.strip().lower()
@@ -211,7 +220,7 @@ def _curated_events(
                 tags=[category, "curated"],
             )
         )
-    items.sort(key=lambda i: i.start or "")
+    items.sort(key=_event_sort_key)
     return items
 
 
@@ -463,7 +472,7 @@ def _oa_events_to_items(events: list[dict], place: Place, lang: str) -> list[Ite
                 tags=[category, "openagenda"],
             )
         )
-    items.sort(key=lambda i: i.start or "")
+    items.sort(key=_event_sort_key)
     return items
 
 
@@ -591,7 +600,7 @@ async def get_events(
             continue
         seen_ids.add(item.id)
         merged.append(item)
-    merged.sort(key=lambda i: i.start or "")
+    merged.sort(key=_event_sort_key)
 
     if live and curated:
         pass
