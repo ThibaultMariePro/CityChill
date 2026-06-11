@@ -393,7 +393,7 @@
     Markets: "Marchés", Festival: "Festival",
   };
 
-  let currentLang = "en";
+  let currentLang = "fr";
 
   function normalizeLang(lang) {
     return lang === "fr" ? "fr" : "en";
@@ -413,8 +413,58 @@
     return KEYWORDS_FR[word] || word;
   }
 
+  let dayFormatter = null;
+  let weekdayFormatter = null;
+  let dateTimeFormatter = null;
+
+  function resetDateFormatters() {
+    dayFormatter = null;
+    weekdayFormatter = null;
+    dateTimeFormatter = null;
+  }
+
   function dateLocale() {
-    return currentLang === "fr" ? "fr-FR" : undefined;
+    return currentLang === "fr" ? "fr-FR" : "en-GB";
+  }
+
+  function parseISODateLocal(iso) {
+    const [y, m, d] = String(iso).split("T")[0].split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function formatDay(iso) {
+    if (!iso) return "";
+    if (!dayFormatter) {
+      dayFormatter = new Intl.DateTimeFormat(dateLocale(), {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      });
+    }
+    return dayFormatter.format(parseISODateLocal(iso));
+  }
+
+  function formatWeekday(iso) {
+    if (!weekdayFormatter) {
+      weekdayFormatter = new Intl.DateTimeFormat(dateLocale(), { weekday: "short" });
+    }
+    return weekdayFormatter.format(parseISODateLocal(iso));
+  }
+
+  function formatDateTime(date = new Date()) {
+    if (!dateTimeFormatter) {
+      dateTimeFormatter = new Intl.DateTimeFormat(dateLocale(), {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    }
+    return dateTimeFormatter.format(date);
+  }
+
+  function formatRange(start, end) {
+    if (!start) return "";
+    if (!end || end === start) return formatDay(start);
+    return `${formatDay(start)} – ${formatDay(end)}`;
   }
 
   function applyStatic(root = document) {
@@ -446,6 +496,7 @@
   function setLang(lang) {
     currentLang = normalizeLang(lang);
     document.documentElement.lang = currentLang;
+    resetDateFormatters();
     applyStatic();
     return currentLang;
   }
@@ -461,6 +512,10 @@
     applyStatic,
     translateKeyword,
     dateLocale,
+    formatDay,
+    formatWeekday,
+    formatDateTime,
+    formatRange,
     SUPPORTED: ["en", "fr"],
   };
 })();

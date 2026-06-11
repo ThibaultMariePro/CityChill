@@ -6,17 +6,25 @@
 
   const I18N = window.CityChillyI18n || {
     t: (key) => key,
-    getLang: () => "en",
-    setLang: () => "en",
+    getLang: () => "fr",
+    setLang: () => "fr",
     applyStatic: () => {},
     translateKeyword: (word) => word,
-    dateLocale: () => undefined,
+    dateLocale: () => "en-GB",
+    formatDay: (iso) => iso || "",
+    formatWeekday: (iso) => iso || "",
+    formatDateTime: (d) => String(d),
+    formatRange: (start, end) => end && end !== start ? `${start} – ${end}` : (start || ""),
     SUPPORTED: ["en", "fr"],
   };
   const t = (key, vars) => I18N.t(key, vars);
   const getLang = () => I18N.getLang();
   const translateKeyword = (word) => I18N.translateKeyword(word);
-  const dateLocale = () => I18N.dateLocale();
+  const fmtDay = (iso) => I18N.formatDay(iso);
+  const fmtRange = (start, end) => {
+    if (!start) return t("card.anytime");
+    return I18N.formatRange(start, end);
+  };
 
   const API = "";
   const DISCOVER_PAGE_SIZE = 40;
@@ -174,18 +182,6 @@
     }
     return translateKeyword(word);
   }
-
-  const fmtDay = (iso) => {
-    if (!iso) return null;
-    return new Date(iso + "T00:00:00").toLocaleDateString(dateLocale(), {
-      weekday: "short", month: "short", day: "numeric",
-    });
-  };
-  const fmtRange = (start, end) => {
-    if (!start) return t("card.anytime");
-    if (!end || end === start) return fmtDay(start);
-    return `${fmtDay(start)} – ${fmtDay(end)}`;
-  };
 
   function fmtEventDateMeta(item) {
     if (item.kind !== "event") return "";
@@ -365,7 +361,7 @@
       const node = el("div", "wx-day");
       const name = i === 0
         ? t("weather.today")
-        : new Date(d.date + "T00:00:00").toLocaleDateString(dateLocale(), { weekday: "short" });
+        : I18N.formatWeekday(d.date);
       const tmax = d.temp_max != null ? Math.round(d.temp_max) : "–";
       const tmin = d.temp_min != null ? Math.round(d.temp_min) : "–";
       node.innerHTML = `
@@ -904,7 +900,7 @@
     const { groups, keys } = groupAgendaItems(items);
     const lines = [
       "CityChilly — My Agenda",
-      `Exported ${new Date().toLocaleString()}`,
+      `Exported ${I18N.formatDateTime(new Date())}`,
       "",
     ];
 
@@ -2626,8 +2622,7 @@
     if (savedPalette) state.activePalette = savedPalette;
 
     const savedLang = readString(LS.lang);
-    const browserLang = navigator.language?.toLowerCase().startsWith("fr") ? "fr" : "en";
-    I18N.setLang(savedLang || browserLang);
+    I18N.setLang(savedLang || "fr");
     I18N.applyStatic();
 
     let theme = readString(LS.theme);
