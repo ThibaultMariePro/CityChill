@@ -30,6 +30,7 @@
   const DISCOVER_PAGE_SIZE = 40;
   const MIN_CATEGORY_RESULTS = 12;
   const MAX_CATEGORY_FETCH_ROUNDS = 25;
+  const MAX_KEYWORD_FETCH_ROUNDS = 12;
   let defaultCountry = "France";
   const LS = {
     theme:     "citychilly:theme",
@@ -73,6 +74,7 @@
     loadMoreInFlight: false,
     eventsLoading: false,
     filterFetchInFlight: false,
+    keywordFetchInFlight: false,
     oaRenderRetry: false,
     tab: "discover",
     keySpecs: [],
@@ -116,6 +118,7 @@
   let acSuggestions  = [];
   let loadGeneration = 0;
   let filterFetchGeneration = 0;
+  let keywordFetchGeneration = 0;
 
   /* ── tiny helpers ────────────────────────────────────────────────────── */
   const $ = (sel) => document.querySelector(sel);
@@ -860,37 +863,52 @@
     });
   }
 
-  function itemMatchesActivityKeyword(item, query) {
+  function normalizeSearchText(value) {
+    return String(value ?? "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "");
+  }
+
+  function itemMatchesKeyword(item, query) {
     if (!query) return true;
-    if (item.kind !== "activity") return true;
-    const q = query.toLowerCase();
+    const terms = normalizeSearchText(query).split(/\s+/).filter(Boolean);
+    if (!terms.length) return true;
+
     const meta = catMeta(item.category);
-    const hay = [
-      item.title,
-      item.description,
-      item.keyword,
-      item.location_name,
-      item.city,
-      meta.label,
-      ...(item.tags || []),
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return hay.includes(q);
+    const kindLabel = item.kind === "event" ? t("card.event") : t("card.activity");
+    const hay = normalizeSearchText(
+      [
+        item.title,
+        item.description,
+        item.keyword,
+        translateKeyword(item.keyword),
+        item.location_name,
+        item.city,
+        meta.label,
+        kindLabel,
+        ...(item.tags || []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+    return terms.every((term) => hay.includes(term));
   }
 
   function setActivityKeyword(value, { save = true } = {}) {
-    state.filters.activityKeyword = String(value || "").trim();
+    const next = String(value ?? "");
+    state.filters.activityKeyword = next;
     if (save) {
-      if (state.filters.activityKeyword) {
-        localStorage.setItem(LS.activityKeyword, state.filters.activityKeyword);
+      const trimmed = next.trim();
+      if (trimmed) {
+        localStorage.setItem(LS.activityKeyword, trimmed);
       } else {
         localStorage.removeItem(LS.activityKeyword);
       }
     }
     updateActivitySearchBar();
-    renderDiscover();
+    renderActivePanel();
+    if (next.trim()) ensureKeywordResults();
   }
 
   function clearActivityKeyword() {
@@ -899,24 +917,24 @@
     setActivityKeyword("");
   }
 
-  function updateActivitySearchBar() {
-    const form = $("#activity-search-form");
+  function updateActivitySearchBar(liveValue) {
+    const bar = $("#pinned-bar");
+    const searchForm = $("#activity-search-form");
     const input = $("#activity-keyword-input");
     const clearBtn = $("#activity-keyword-clear");
-    if (!form || !input) return;
+    if (!searchForm || !input) return;
 
     const show = state.pins.length > 0;
-    form.hidden = !show;
+    searchForm.hidden = !show;
     if (!show) return;
 
-    const keyword = state.filters.activityKeyword || "";
-    if (document.activeElement !== input) input.value = keyword;
-    if (clearBtn) clearBtn.hidden = !keyword;
-    const disabled = state.filters.kind === "event";
-    input.disabled = disabled;
-    form.classList.toggle("is-disabled", disabled);
-    if (disabled) input.title = t("activitySearch.disabledEvents");
-    else input.removeAttribute("title");
+    const keyword = liveValue != null ? liveValue : (state.filters.activityKeyword || "");
+    if (liveValue == null && document.activeElement !== input && input.value !== keyword) {
+      input.value = keyword;
+    }
+    if (clearBtn) clearBtn.hidden = !String(keyword).trim();
+    searchForm.classList.toggle("has-value", Boolean(String(keyword).trim()));
+    if (bar) bar.classList.toggle("pinned-bar--has-search", show);
   }
 
   function filteredItems() {
@@ -933,8 +951,8 @@
         (it) => it.kind !== "event" || (it.tags || []).includes("openagenda")
       );
     }
-    if (activityKeyword) {
-      items = items.filter((it) => itemMatchesActivityKeyword(it, activityKeyword));
+    if (activityKeyword.trim()) {
+      items = items.filter((it) => itemMatchesKeyword(it, activityKeyword));
     }
     return sortDiscoverItems(items);
   }
@@ -1002,7 +1020,12 @@
 
     const shownLive = items.filter((it) => isLiveEvent(it)).length;
     if (hint) {
-      if (state.filterFetchInFlight) {
+      if (state.keywordFetchInFlight) {
+        hint.hidden = false;
+        hint.textContent = t("loading.keywordMore", {
+          keyword: state.filters.activityKeyword.trim(),
+        });
+      } else if (state.filterFetchInFlight) {
         const cat = state.categories.find((c) => c.id === state.filters.category);
         const catLabel = cat ? `${cat.emoji} ${cat.label}` : state.filters.category;
         hint.hidden = false;
@@ -1021,10 +1044,15 @@
 
     if (!items.length) {
       empty.hidden = false;
+      const keyword = state.filters.activityKeyword.trim();
       const moreHint = discoverHasMore()
         ? `<p class="empty__more-hint">${esc(t("results.loadMore"))}</p>`
         : "";
-      empty.innerHTML = `<div class="empty__emoji">🧐</div><h3>${esc(t("empty.noFilter.title"))}</h3><p>${esc(t("empty.noFilter.body"))}</p>${moreHint}`;
+      if (keyword) {
+        empty.innerHTML = `<div class="empty__emoji">🔎</div><h3>${esc(t("empty.noKeyword.title", { keyword }))}</h3><p>${esc(t("empty.noKeyword.body"))}</p>${moreHint}`;
+      } else {
+        empty.innerHTML = `<div class="empty__emoji">🧐</div><h3>${esc(t("empty.noFilter.title"))}</h3><p>${esc(t("empty.noFilter.body"))}</p>${moreHint}`;
+      }
       updateLoadMoreButton();
       return;
     }
@@ -1506,6 +1534,35 @@
     } finally {
       state.loadMoreInFlight = false;
       updateLoadMoreButton();
+    }
+  }
+
+  async function ensureKeywordResults() {
+    const gen = ++keywordFetchGeneration;
+    const keyword = state.filters.activityKeyword.trim();
+    if (!keyword || !state.pins.length || state.eventsLoading) return;
+
+    state.keywordFetchInFlight = true;
+    renderDiscover();
+
+    let rounds = 0;
+    try {
+      while (
+        gen === keywordFetchGeneration &&
+        rounds < MAX_KEYWORD_FETCH_ROUNDS &&
+        filteredItems().length < MIN_CATEGORY_RESULTS &&
+        discoverHasMore()
+      ) {
+        await loadMoreDiscover();
+        rounds += 1;
+        if (gen !== keywordFetchGeneration) return;
+        renderDiscover();
+      }
+    } finally {
+      if (gen === keywordFetchGeneration) {
+        state.keywordFetchInFlight = false;
+        renderDiscover();
+      }
     }
   }
 
@@ -2928,6 +2985,7 @@
       renderWarnings();
       renderActivePanel();
       if (state.filters.category !== "all") ensureFilteredResults();
+      if (state.filters.activityKeyword.trim()) ensureKeywordResults();
       if (refresh && gen === loadGeneration && Object.keys(state.pinData).length) {
         toast(t("toast.refreshDone"));
         checkApiHealth({ force: true });
@@ -3203,10 +3261,14 @@
 
     let activityKeywordTimer = null;
     $("#activity-keyword-input")?.addEventListener("input", (e) => {
+      const value = e.target.value;
+      state.filters.activityKeyword = value;
+      updateActivitySearchBar(value);
+      renderActivePanel();
       clearTimeout(activityKeywordTimer);
       activityKeywordTimer = setTimeout(() => {
-        setActivityKeyword(e.target.value, { save: true });
-      }, 200);
+        setActivityKeyword(value, { save: true });
+      }, 150);
     });
     $("#activity-keyword-clear")?.addEventListener("click", () => clearActivityKeyword());
     $("#activity-search-form")?.addEventListener("submit", (e) => {
