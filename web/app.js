@@ -679,11 +679,6 @@
   const isLiveEvent = (item) =>
     item.kind === "event" && (item.tags || []).includes("openagenda");
 
-  const isCuratedEvent = (item) =>
-    item.kind === "event"
-    && (item.tags || []).includes("curated")
-    && !isLiveEvent(item);
-
   function rawDiscoverCounts() {
     const counts = { live: 0, curated: 0, activities: 0 };
     for (const pin of state.pins) {
@@ -709,22 +704,11 @@
 
     const media = el("div", `card__media cat-${esc(item.category)}`);
     const keyword = itemKeyword(item);
-    const liveHint = isLiveEvent(item)
-      ? `<span class="card__live-hint" title="${esc(t("card.liveHint"))}" aria-label="${esc(t("card.liveHint"))}">Live</span>`
-      : "";
-    const curatedHint = isCuratedEvent(item)
-      ? `<span class="card__curated-hint" title="${esc(t("card.curatedHint"))}" aria-label="${esc(t("card.curatedHint"))}">ℹ️</span>`
-      : "";
-    const hints = [liveHint, curatedHint].filter(Boolean).join("");
-    const hintsHtml = hints ? `<div class="card__hints">${hints}</div>` : "";
     media.innerHTML = `
       <div class="card__topbar">
         <div class="card__header">
           <span class="card__emoji" aria-hidden="true">${meta.emoji}</span>
-          <div class="card__header-main">
-            <p class="card__keyword">${esc(keyword)}</p>
-            ${hintsHtml}
-          </div>
+          <p class="card__keyword">${esc(keyword)}</p>
         </div>
         ${favButtonHtml(item)}
       </div>
