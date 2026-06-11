@@ -346,9 +346,10 @@
   </footer>
 
   <div id="loading" class="loading" hidden role="alertdialog" aria-modal="true" aria-labelledby="loading-text" aria-busy="true">
-    <div class="loading__panel">
+    <div class="loading__content">
       <div class="loading-spinner loading-spinner--lg" aria-hidden="true"></div>
-      <p id="loading-text" data-i18n="loading.default">Finding cool things to do…</p>
+      <p id="loading-text" class="loading__title" data-i18n="loading.default">Finding cool things to do…</p>
+      <p id="loading-subtext" class="loading__subtext" data-i18n="loading.wait">This may take a few seconds…</p>
     </div>
   </div>
 
