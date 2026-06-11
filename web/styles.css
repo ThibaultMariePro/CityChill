@@ -1216,11 +1216,11 @@ a { color: inherit; }
 }
 .card__keyword {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.05rem;
+  font-family: var(--font-card-title);
+  font-size: 1.22rem;
   font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: .01em;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
   text-shadow: 0 1px 6px rgba(0,0,0,.35);
   display: -webkit-box;
   -webkit-line-clamp: 2;
